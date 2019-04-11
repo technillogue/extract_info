@@ -156,14 +156,15 @@ def extract_info(text, refine=True):
         clean_text = " ".join([
             word for word in text.split()
             if (word not in extract_emails(text)
-                and any(c.isalpha() for c in word))
+                and any((c.isalpha() or c == "-") for c in word))
         ])
         # find names
-        name_attempt = max(
+        name_attempt =  extract_names(text)
+        """max(
             extract_names(clean_text),
             extract_names(text),
             key=len
-        )
+        )"""
         if len(name_attempt) < contacts:
             names = [word for word in text.split() if word[0].isupper()]
         else:
@@ -213,6 +214,9 @@ def classify(entry):
         return (contacts_type, names_type)
 
 
+def space_dashes(text):
+    return re.sub(r"-([^ -])", "- \1", re.sub(r"([^ -])-", "\1 -", text))
+
 if __name__ == "__main__":
     cache.open_cache()
     parser = argparse.ArgumentParser("extract names and contact info from csv")
@@ -227,7 +231,7 @@ if __name__ == "__main__":
         cols = ["line", "emails", "phones", "names"]
         lines = open("trello.csv", encoding="utf-8").readlines()[1:]
         entries = [
-            extract_info(line, refine=args.refine)
+            extract_info(space_dashes(line), refine=args.refine)
             for line in lines
         ]
         ## counting
@@ -300,3 +304,11 @@ saved cache
 #true positive: 0.733, false negative: 0.105, false positive: 0.163
 
 # don't check clean
+#true positive: 0.726, false negative: 0.113, false positive: 0.16
+# however, somewhat better performance for getting the correct name imo
+
+# don't check clean but put spaces around -
+#true positive: 0.728, false negative: 0.105, false positive: 0.167
+
+# also remember to keep the dashses lol
+# true positive: 0.77, false negative: 0.109, false positive: 0.121
