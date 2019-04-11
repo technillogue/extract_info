@@ -3,6 +3,7 @@ import json
 import re
 import itertools
 import functools
+import string
 import argparse
 from collections import defaultdict, Counter
 from pprint import pprint as pp
@@ -157,15 +158,17 @@ def extract_info(text, refine=True):
             if (word not in extract_emails(text)
                 and any(c.isalpha() for c in word))
         ])
-        names = extract_names(clean_text)
+        names = max(extract_names(clean_text), extract_names(text), key=len)
         # if not correct, compare and filter with g_names
         if len(names) > contacts:
-            g_names = g_extract_names(clean_text)
+            g_names = g_extract_names(
+                "".join([c for c in clean_text if c in string.printable])
+            )
             if g_names:
                 names_intersect = [
                     name
                     for name in names
-                    if [
+                    if name[0] not in string.printable or [
                         part
                         for g_name in g_names
                         for part in name.split()
@@ -275,3 +278,7 @@ saved cache
 # cleaned up, fixed preprocessing bug, one preprocessing method
 #$ python -i extract_info.py --clear
 #true positive: 0.533, false negative: 0.416, false positive: 0.0514
+
+# only compare google if it gives an answer
+#$ python -i extract_info.py --clear
+#true positive: 0.533, false negative: 0.329, false positive: 0.138
