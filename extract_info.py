@@ -158,7 +158,16 @@ def extract_info(text, refine=True):
             if (word not in extract_emails(text)
                 and any(c.isalpha() for c in word))
         ])
-        names = max(extract_names(clean_text), extract_names(text), key=len)
+        # find names
+        name_attempt = max(
+            extract_names(clean_text),
+            extract_names(text),
+            key=len
+        )
+        if len(name_attempt) < contacts:
+            names = [word for word in text.split() if word[0].isupper()]
+        else:
+            names = name_attempt
         # if not correct, compare and filter with g_names
         if len(names) > contacts:
             g_names = g_extract_names(
@@ -282,3 +291,12 @@ saved cache
 # only compare google if it gives an answer
 #$ python -i extract_info.py --clear
 #true positive: 0.533, false negative: 0.329, false positive: 0.138
+
+# not sure what the change here is
+# $ python -i extract_info.py --clear
+#true positive: 0.591, false negative: 0.276, false positive: 0.134
+
+# check max(clean, not clean) and every capitalized word
+#true positive: 0.733, false negative: 0.105, false positive: 0.163
+
+# don't check clean
