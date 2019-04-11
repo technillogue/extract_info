@@ -19,18 +19,22 @@ EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+')
 ## generic functions
 
 def pad_infinite(iterable, padding=None):
+    "infinitely pad an iterable"
     return itertools.chain(iterable, itertools.repeat(padding))
 
 def pad(iterable, size, padding=""):
+    "pad an iterable to length size"
     return list(itertools.islice(pad_infinite(iterable, padding), size))
 
-def take_until(stop_condition, iterable):
-    for x in iterable:
-        yield x
-        if stop_condition(x):
-            break
 
 class Cache:
+    """
+    non-functional cache for storing expensive computation in between
+    program runs, as a function decorator.
+    only stores the first argument and repeats it exactly once when saving
+    to disk, i.e. {arg: {func1: result1, func2: result2}, arg2: {...}, ...}
+    use finally: to make sure the cache gets saved
+    """
     def __init__(self, cachename="cache.json"):
         self.cachename = cachename
         self.funcs = []
@@ -77,6 +81,7 @@ cache = Cache()
 
 @cache.with_cache
 def extract_phones(text):
+    "returns phone numbers in text"
     phone_numbers = [
         re.sub(r'\D', '', number)
         for number in PHONE_RE.findall(text)
@@ -85,10 +90,12 @@ def extract_phones(text):
 
 @cache.with_cache
 def extract_emails(text):
+    "returns emails in text"
     return EMAIL_RE.findall(text)
 
 @cache.with_cache
 def extract_names(text):
+    "returns names using NLTK Named Entity Recognition, filters out repetition"
     names = []
     for sentance in nltk.sent_tokenize(text):
         for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance))):
@@ -102,6 +109,7 @@ def extract_names(text):
 
 @cache.with_cache
 def g_extract_names(text):
+    "returns names using Google Cloud Knowledge Graph Named Entity Recognition"
     try:
         results = analyze_entities(text)
     except HttpError:
@@ -114,6 +122,7 @@ def g_extract_names(text):
 
 
 def refine_names(names, goal):
+    "removes words that have wordnet synonyms"
     refined_names = [
         name
         for name in names
@@ -132,32 +141,32 @@ def refine_names(names, goal):
         return refined_names
     return names
 
-@cache.with_cache
-def extract_info(text, refine=True):
-    # if there's no contact info, skip it
-    # if there's one contact and one normal name, great
-    # if less normal names than contacts:
-    # try google
-    # if google doesn't know, try stripping punctuation
-    # if that's too much try stripping synonyms
+def space_dashes(text):
+    "put spaces around dashes without spaces"
+    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
-    # if text in cache:
-    #    return cache[text]
+def remove_non_alpha(text):
+    "remove words that don't have any alphabetical chareceters or -"
+    return " ".join([
+            word for word in text.split()
+            if (word not in extract_emails(text)
+                and any((c.isalpha() or c == "-") for c in word))
+        ])
+
+@cache.with_cache
+def extract_info(line, refine=True):
     result = {
-        "line":   [text.replace("'", "").replace("\n", "")],
-        "emails": extract_emails(text),
-        "phones": extract_phones(text)
+        "line":   [line.replace("'", "").replace("\n", "")],
+        "emails": extract_emails(line),
+        "phones": extract_phones(line)
     }
+    text = space_dashes(line)
     contacts = max(len(result["emails"]), len(result["phones"]))
     if contacts == 0:
         names = ["skipped"]
     else:
         # preprocess
-        clean_text = " ".join([
-            word for word in text.split()
-            if (word not in extract_emails(text)
-                and any((c.isalpha() or c == "-") for c in word))
-        ])
+        clean_text = remove_non_alpha(text)
         # find names
         name_attempt =  extract_names(text)
         """max(
@@ -214,9 +223,6 @@ def classify(entry):
         return (contacts_type, names_type)
 
 
-def space_dashes(text):
-    return re.sub(r"-([^ -])", "- \1", re.sub(r"([^ -])-", "\1 -", text))
-
 if __name__ == "__main__":
     cache.open_cache()
     parser = argparse.ArgumentParser("extract names and contact info from csv")
@@ -231,7 +237,7 @@ if __name__ == "__main__":
         cols = ["line", "emails", "phones", "names"]
         lines = open("trello.csv", encoding="utf-8").readlines()[1:]
         entries = [
-            extract_info(space_dashes(line), refine=args.refine)
+            extract_info(line, refine=args.refine)
             for line in lines
         ]
         ## counting
@@ -264,7 +270,7 @@ if __name__ == "__main__":
         with open("info.csv", "w", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(header)
-            writer.writerow(rows)
+            writer.writerows(rows)
     finally:
         cache.save_cache()
 
