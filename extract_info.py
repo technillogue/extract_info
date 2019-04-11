@@ -143,13 +143,13 @@ def extract_info(text, refine=True):
     # if text in cache:
     #    return cache[text]
     result = {
-        "line":   text.replace("'", "").replace("\n", ""),
+        "line":   [text.replace("'", "").replace("\n", "")],
         "emails": extract_emails(text),
         "phones": extract_phones(text)
     }
     contacts = max(len(result["emails"]), len(result["phones"]))
     if contacts == 0:
-        result["names"] = ["skipped"]
+        names = ["skipped"]
     else:
         # preprocess
         clean_text = " ".join([
@@ -161,23 +161,24 @@ def extract_info(text, refine=True):
         # if not correct, compare and filter with g_names
         if len(names) > contacts:
             g_names = g_extract_names(clean_text)
-            names_intersect = [
-                name
-                for name in names
-                if [
-                    part
-                    for g_name in g_names
-                    for part in name.split()
-                    if part in g_name
+            if g_names:
+                names_intersect = [
+                    name
+                    for name in names
+                    if [
+                        part
+                        for g_name in g_names
+                        for part in name.split()
+                        if part in g_name
+                    ]
                 ]
-            ]
             # maybe refine with synset
-            if refine and len(names_intersect) > contacts:
-                result["names"] = refine_names(names_intersect, contacts)
-            else:
+                if refine and len(names_intersect) > contacts:
+                    result["names"] = refine_names(names_intersect, contacts)
+                    return result
                 result["names"] = names_intersect
-        else:
-            result["names"] = names
+                return result
+    result["names"] = names
     return result
 
 
@@ -235,7 +236,7 @@ if __name__ == "__main__":
             key: max(map(len, [entry[key] for entry in entries]))
             for key in cols
         }
-        header = [pad([k], max_len[k]) for k in cols]
+        header = [heading for k in cols for heading in pad([k], max_len[k])]
         rows = [
             [
                 item
@@ -270,5 +271,7 @@ saved cache
 #$ python -i extract_info.py --clear --preprocess --keep
 #true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
 
-# cleaned up, no refine, preprocessing bug
-# true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
+
+# cleaned up, fixed preprocessing bug, one preprocessing method
+#$ python -i extract_info.py --clear
+#true positive: 0.533, false negative: 0.416, false positive: 0.0514
