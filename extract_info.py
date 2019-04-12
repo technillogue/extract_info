@@ -13,18 +13,10 @@ from nltk.corpus import wordnet
 from google_analyze import analyze_entities
 from googleapiclient.errors import HttpError
 
+# requires python3.6+
+
 PHONE_RE = re.compile(r'(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})')
 EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+')
-
-## generic functions
-
-def pad_infinite(iterable, padding=None):
-    "infinitely pad an iterable"
-    return itertools.chain(iterable, itertools.repeat(padding))
-
-def pad(iterable, size, padding=""):
-    "pad an iterable to length size"
-    return list(itertools.islice(pad_infinite(iterable, padding), size))
 
 
 class Cache:
@@ -67,7 +59,9 @@ class Cache:
         def wrapper(text, *args, **kwargs):
             try:
                 if self.cache[text][func] is not None:
-                    return self.cache[text][func]
+                    if not (func == "g_extract_names"
+                            and self.cache[text][func] == []):
+                        return self.cache[text][func]
             except KeyError:
                 pass
             value = decorated(text, *args, **kwargs)
@@ -86,7 +80,9 @@ def extract_phones(text):
         re.sub(r'\D', '', number)
         for number in PHONE_RE.findall(text)
     ]
-    return phone_numbers
+    # removes duplicates while preserving order, only works correctly in
+    # python3.6+
+    return list(dict.fromkeys(phone_numbers))
 
 @cache.with_cache
 def extract_emails(text):
@@ -109,7 +105,11 @@ def extract_names(text):
 
 @cache.with_cache
 def g_extract_names(text):
-    "returns names using Google Cloud Knowledge Graph Named Entity Recognition"
+    """
+    returns names using Google Cloud Knowledge Graph Named Entity Recognition
+    skips non-ASCII charecters
+    """
+    text = "".join([c for c in text if c in string.printable])
     try:
         results = analyze_entities(text)
     except HttpError:
@@ -121,20 +121,23 @@ def g_extract_names(text):
     ]
 
 
-def refine_names(names, goal):
-    "removes words that have wordnet synonyms"
+def refine_names(names, min_goal, max_goal):
+    "removes words that have wordnet synonyms, then maybe removes nonlatin"
     refined_names = [
         name
         for name in names
         if not any(len(wordnet.synsets(word)) > 1 for word in name.split())
     ]
-    keep = len(refined_names) == goal
+    if len(refined_names) > max_goal:
+        pass # ADD: remove latin names
+    keep = min_goal <= len(refined_names) <= max_goal
     if args.debug:
         if keep:
-            print ("refined {} to {}. goal: {}, keeping: {}".format(
+            print("refined {} to {}. goal: {}-{}, keeping: {}".format(
                 names,
                 refined_names,
-                goal,
+                min_goal,
+                max_goal,
                 keep
             ))
     if keep:
@@ -145,13 +148,21 @@ def space_dashes(text):
     "put spaces around dashes without spaces"
     return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
-def remove_non_alpha(text):
+def only_alpha(text):
     "remove words that don't have any alphabetical chareceters or -"
     return " ".join([
-            word for word in text.split()
-            if (word not in extract_emails(text)
-                and any((c.isalpha() or c == "-") for c in word))
-        ])
+        word for word in text.split()
+        if (word not in extract_emails(text)
+            and all((c.isalpha() or c in r"-\!$%(,.:;?") for c in word))
+    ])
+
+def every_name(names):
+    return "".join(map(
+        "My name is {}. ".format,
+        names
+    ))
+
+cases = defaultdict(lambda : defaultdict(lambda : defaultdict(lambda : 0)))
 
 @cache.with_cache
 def extract_info(line, refine=True):
@@ -161,66 +172,89 @@ def extract_info(line, refine=True):
         "phones": extract_phones(line)
     }
     text = space_dashes(line)
-    contacts = max(len(result["emails"]), len(result["phones"]))
-    if contacts == 0:
-        names = ["skipped"]
+    max_contacts = max(len(result["emails"]), len(result["phones"]))
+    if max_contacts == 0:
+        result["names"] = ["skipped"]
+        return result
+    # e.g. if there's 0 email and 1 phone, it's 1,
+    # but if there's 1 email and 3 phone it's 1.
+    min_contacts = max(1, min(len(result["emails"]), len(result["phones"])))
+    # preprocess
+
+    # get more names
+    name_attempt = extract_names(text)
+    if len(name_attempt) < min_contacts:
+        n_status = "n_every_cap"
+        names = [word for word in text.split() if word[0].isupper()]
     else:
-        # preprocess
-        clean_text = remove_non_alpha(text)
-        # find names
-        name_attempt =  extract_names(text)
-        """max(
-            extract_names(clean_text),
-            extract_names(text),
-            key=len
-        )"""
-        if len(name_attempt) < contacts:
-            names = [word for word in text.split() if word[0].isupper()]
-        else:
-            names = name_attempt
-        # if not correct, compare and filter with g_names
-        if len(names) > contacts:
-            g_names = g_extract_names(
-                "".join([c for c in clean_text if c in string.printable])
-            )
-            if g_names:
-                names_intersect = [
-                    name
-                    for name in names
-                    if name[0] not in string.printable or [
-                        part
-                        for g_name in g_names
-                        for part in name.split()
-                        if part in g_name
-                    ]
+        n_status = "n_good"
+        names = name_attempt
+    # maybe filter out names
+    if len(names) <= max_contacts:
+        names_filtered = names
+        g_approach = "no_g"
+    else:
+        # only_alpha(text), text, map(names)
+        # try to do it with google
+        approaches = (
+            lambda : only_alpha(text),
+            lambda : text,
+            lambda : every_name(names)
+        ) # unfortunately the only way to make this lazy in python
+        g_approach, g_names = next(
+            filter(lambda e: bool(e[1]), enumerate(
+                g_extract_names(approach())
+                for approach in approaches
+            )),
+            ("g_failed", None)
+        )
+        if g_names:
+            names_filtered = [
+                name
+                for name in names
+                if name[0] not in string.printable or [
+                    part
+                    for g_name in g_names
+                    for part in name.split()
+                    if part in g_name
                 ]
-            # maybe refine with synset
-                if refine and len(names_intersect) > contacts:
-                    result["names"] = refine_names(names_intersect, contacts)
-                    return result
-                result["names"] = names_intersect
-                return result
-    result["names"] = names
+            ]
+        else:
+            names_filtered = names
+    # maybe refine with synset and discarding nonlatin names
+    if refine and len(names_filtered) > max_contacts:
+        result["names"] = refine_names(
+            names_filtered,
+            min_contacts,
+            max_contacts
+        )
+    else:
+        result["names"] = names_filtered
+    if not min_contacts <= len(result["names"]) <= max_contacts:
+        cases[n_status][g_approach][
+            "too much" if len(result["names"]) > max_contacts else "too little"
+        ] += 1
     return result
 
 
 def classify(entry):
-    contacts = max(len(entry["emails"]), len(entry["phones"]))
+    max_contacts = max(len(entry["emails"]), len(entry["phones"]))
+    min_contacts = max(1, min(len(entry["emails"]), len(entry["phones"])))
     names = len(entry["names"])
-    if contacts == 0:
-        return (0, 0)
+    if max_contacts == 0:
+        return (-1, -1)
     else:
-        if contacts == 1:
+        if max_contacts == 1:
             contacts_type = 1
         else:
             contacts_type = 2
-        if names < contacts:
-            names_type = -1
-        elif names == contacts:
-            names_type = 1
+        if names < min_contacts:
+            names_type = 2 # type 2 error, not enough names, false negative
+        elif min_contacts <= names <= max_contacts:
+            names_type = 0 # correct
         else:
-            names_type = 2
-        return (contacts_type, names_type)
+            names_type = 1 # type 1 error, too many names, false positive
+        return (names_type, contacts_type)
 
 
 if __name__ == "__main__":
@@ -234,38 +268,34 @@ if __name__ == "__main__":
     if args.clear:
         cache.clear_cache("extract_info")
     try:
-        cols = ["line", "emails", "phones", "names"]
-        lines = open("trello.csv", encoding="utf-8").readlines()[1:]
+        lines = list(csv.reader(open("info_edited.csv", encoding="utf-8")))[1:]
         entries = [
-            extract_info(line, refine=args.refine)
+            extract_info(line[0], refine=args.refine)
             for line in lines
         ]
         ## counting
         entries.sort(key=classify)
         entry_types = {k: list(g) for k, g in itertools.groupby(entries, classify)}
         counts = Counter(map(classify, entries))
-        total = sum(counts.values()) - counts[(0, 0)]
+        total = sum(counts.values()) - counts[(-1, -1)]
         print(
-            "true positive: {:.3}, false negative: {:.3}"
-            ", false positive: {:.3}".format(
-            (counts[(1, 1)] + counts[(2, 1)]) / total,
-            (counts[(1, -1)] + counts[(2, -1)]) / total,
-            (counts[(1, 2)] + counts[(2, 2)]) / total
-        ))
-
+            "true positive: {:.2%}, false negative: {:.2%}"
+            ", false positive: {:.2%}".format(*[
+                sum(
+                    counts[k] for k in counts.keys() if k[0] == names_type
+                ) / total
+                for names_type in (0, 2, 1)
+            ])
+        )
         # padding
-        max_len = {
-            key: max(map(len, [entry[key] for entry in entries]))
-            for key in cols
-        }
-        header = [heading for k in cols for heading in pad([k], max_len[k])]
+        header = ["line", "emails", "phones", "names"]
         rows = [
-            [
-                item
-                for key in cols
-                for item in pad(entry[key], max_len[key])
-            ]
+            list(triple)
             for entry in entries
+            for triple in itertools.zip_longest(
+                *map(entry.get, header),
+                ""
+            )
         ]
         with open("info.csv", "w", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -274,23 +304,17 @@ if __name__ == "__main__":
     finally:
         cache.save_cache()
 
-"""
-[technillogue@spock:~/misc/dad]$ python -i extract_info.py --clear --preprocess --keep
-true positive: 0.6172839506172839, false negative: 0.19547325102880658, false positive: 0.18724279835390947
-saved cache
->>>
+# preprocess, keep
+# true positive: 0.6172839506172839, false negative: 0.19547325102880658, false positive: 0.18724279835390947
 
-[technillogue@spock:~/misc/dad]$ python -i extract_info.py --clear --keep
-true positive: 0.565843621399177, false negative: 0.24279835390946503, false positive: 0.19135802469135801
-saved cache
->>>
+# don't preprocess, keep
+#true positive: 0.565843621399177, false negative: 0.24279835390946503, false positive: 0.19135802469135801
 
-[technillogue@spock:~/misc/dad]$ python -i extract_info.py --clear --preprocess --keep
-true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
-saved cache
-"""
+#preprocess, keep [unknown change]
+#true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
 
-#$ python -i extract_info.py --clear --preprocess --keep
+
+#preprocess, keep [unknown change]
 #true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
 
 
@@ -318,3 +342,40 @@ saved cache
 
 # also remember to keep the dashses lol
 # true positive: 0.77, false negative: 0.109, false positive: 0.121
+
+# what if dashes but parsed correctly without fucking phone numbers
+#true positive: 0.782, false negative: 0.0885, false positive: 0.13
+
+# remove duplicate phone numbers
+# true positive: 78.19%, false negative: 8.85%, false positive: 12.96%
+
+# do things by hand? maybe some other change
+# true positive: 82.51%, false negative: 4.53%, false positive: 12.96%
+
+# add min and max contacts, give google more punctuation
+# true positive: 83.54%, false negative: 4.53%, false positive: 11.93%
+
+# send google only alpha words instead of words with alpha chars
+# true positive: 83.54%, false negative: 4.53%, false positive: 11.93%
+
+
+# a lot of errors are based on incorrectly identifying locations
+# spacy might help a lot, actually, for forming consensus
+# approches: examine every extra word to see if it's in google
+# try different preprocessing to see where google gives max results
+
+# cleaner data
+# true positive: 84.57%, false negative: 4.53%, false positive: 10.91%
+
+# refactored, maybe refine in all cases
+# true positive: 86.63%, false negative: 4.53%, false positive: 8.85%
+
+# use google to check every name seperately
+# true positive: 87.04%, false negative: 4.53%, false positive: 8.44%
+
+# actually always refine and trust google to say 'nothing'
+# true positive: 85.39%, false negative: 6.79%, false positive: 7.82%
+# welp
+
+# don't trust google to say nothing
+# true positive: 87.04%, false negative: 4.53%, false positive: 8.44%
