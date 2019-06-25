@@ -5,9 +5,8 @@ import itertools
 import functools
 import string
 import argparse
+from typing import Callable, List
 from collections import defaultdict, Counter
-from pprint import pprint as pp
-from pdb import pm
 import nltk
 from nltk.corpus import wordnet
 from google_analyze import analyze_entities
@@ -27,7 +26,7 @@ class Cache:
     to disk, i.e. {arg: {func1: result1, func2: result2}, arg2: {...}, ...}
     use finally: to make sure the cache gets saved
     """
-    def __init__(self, cachename="cache.json"):
+    def __init__(self, cachename: str = "cache.json"):
         self.cachename = cachename
         self.funcs = []
         self.cache = None
@@ -37,22 +36,19 @@ class Cache:
             data = json.load(open(self.cachename, encoding="utf-8"))
         except IOError:
             data = {}
-        self.cache = defaultdict(
-            lambda : {},
-            data
-        )
+        self.cache = defaultdict(dict, data)
 
     def save_cache(self):
         with open(self.cachename, "w", encoding="utf-8") as f:
             json.dump(dict(self.cache), f)
         print("saved cache")
 
-    def clear_cache(self, func):
+    def clear_cache(self, func: str):
         for item in self.cache.values():
             if func in item:
                 del item[func]
 
-    def with_cache(self, decorated):
+    def with_cache(self, decorated: Callable) -> Callable:
         func = decorated.__name__
         self.funcs.append(func)
         @functools.wraps(decorated)
@@ -74,7 +70,7 @@ cache = Cache()
 # extracting info
 
 @cache.with_cache
-def extract_phones(text):
+def extract_phones(text: str) -> List[str]:
     "returns phone numbers in text"
     phone_numbers = [
         re.sub(r'\D', '', number)
@@ -85,12 +81,12 @@ def extract_phones(text):
     return list(dict.fromkeys(phone_numbers))
 
 @cache.with_cache
-def extract_emails(text):
+def extract_emails(text: str) -> List[str]:
     "returns emails in text"
     return EMAIL_RE.findall(text)
 
 @cache.with_cache
-def extract_names(text):
+def extract_names(text: str) -> List[str]:
     "returns names using NLTK Named Entity Recognition, filters out repetition"
     names = []
     for sentance in nltk.sent_tokenize(text):
@@ -104,12 +100,12 @@ def extract_names(text):
     return names
 
 @cache.with_cache
-def g_extract_names(text):
+def g_extract_names(text: str) -> List[str]:
     """
     returns names using Google Cloud Knowledge Graph Named Entity Recognition
     skips non-ASCII charecters
     """
-    text = "".join([c for c in text if c in string.printable])
+    text = "".join(filter(printable.__contains__, text))
     try:
         results = analyze_entities(text)
     except HttpError:
@@ -121,7 +117,7 @@ def g_extract_names(text):
     ]
 
 
-def refine_names(names, min_goal, max_goal):
+def refine_names(names: List[str], min_goal: int, max_goal: int) -> List[str]:
     "removes words that have wordnet synonyms, then maybe removes nonlatin"
     refined_names = [
         name
@@ -144,11 +140,11 @@ def refine_names(names, min_goal, max_goal):
         return refined_names
     return names
 
-def space_dashes(text):
+def space_dashes(text: str) -> str:
     "put spaces around dashes without spaces"
     return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
-def only_alpha(text):
+def only_alpha(text: str) -> str:
     "remove words that don't have any alphabetical chareceters or -"
     return " ".join([
         word for word in text.split()
@@ -156,7 +152,7 @@ def only_alpha(text):
             and all((c.isalpha() or c in r"-\!$%(,.:;?") for c in word))
     ])
 
-def every_name(names):
+def every_name(names: str) -> str:
     return "".join(map(
         "My name is {}. ".format,
         names
@@ -202,10 +198,12 @@ def extract_info(line, refine=True):
             lambda : every_name(names)
         ) # unfortunately the only way to make this lazy in python
         g_approach, g_names = next(
-            filter(lambda e: bool(e[1]), enumerate(
-                g_extract_names(approach())
-                for approach in approaches
-            )),
+            filter(
+                lambda e: bool(e[1]),
+                enumerate(
+                    g_extract_names(approach()) for approach in approaches
+                )
+            ),
             ("g_failed", None)
         )
         if g_names:
