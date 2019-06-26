@@ -1,5 +1,4 @@
 import csv
-import re
 import itertools
 import argparse
 from typing import List, Dict, Tuple
@@ -8,47 +7,50 @@ from cache import cache
 from extract_names import extract_names, extract_emails, extract_phones
 # requires python3.6+
 
-
-def space_dashes(text: str) -> str:
-    "put spaces around dashes without spaces"
-    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
-
 @cache.with_cache
-def extract_info(line: str, refine: bool = True) -> Dict[str, List[str]]:
-    result: Dict[str, List[str]] = {
-        "line":   [line.replace("'", "").replace("\n", "")],
-        "emails": extract_emails(line),
-        "phones": extract_phones(line)
+def extract_info(raw_line: str, **flags: bool) -> Dict[str, List[str]]:
+    line: str = raw_line.replace("'", "").replace("\n", "")
+    emails: List[str] = extract_emails(line)
+    phones: List[str] = extract_phones(line)
+    contact_counts: Tuple[int, int] = (len(emails), len(phones))
+    max_contacts: int = max(contact_counts)
+    # if there's 1 email and 3 phones, min_contacts should be 1
+    # but if there's 0 email and 1 phone, it should be 1, not 0
+    min_contacts: int = max(1, min(contact_counts))
+    names: List[str]
+    if max_contacts == 0:
+        names = ["skipped"]
+    else:
+        names = extract_names(line, min_contacts, max_contacts, **flags)
+    return {
+        "line": [line],
+        "emails": emails,
+        "phones": phones,
+        "names": names
     }
-    text: str = space_dashes(line)
-    max_contacts: int = max(len(result["emails"]), len(result["phones"]))
-    if max_contacts == 0:
-        result["names"] = ["skipped"]
-        return result
-    # e.g. if there's 0 email and 1 phone, min_contactsis 1,
-    # but if there's 1 email and 3 phones, min_contacts is 1, not 2.
-    min_contacts: int = max(1, min(len(result["emails"]), len(result["phones"])))
-    result["names"] = extract_names(text, min_contacts, max_contacts, refine)
-    return result
 
-
-def classify(entry: Dict[str, List[str]]) -> Tuple[int, int]:
-    max_contacts = max(len(entry["emails"]), len(entry["phones"]))
-    min_contacts = max(1, min(len(entry["emails"]), len(entry["phones"])))
-    names = len(entry["names"])
+def classify(entry: Dict[str, List[str]]) -> Tuple[str, str]:
+    contact_counts: Tuple[int, int] = (
+        len(entry["emails"]), len(entry["phones"])
+    )
+    max_contacts: int = max(contact_counts)
+    min_contacts: int = max(1, min(contact_counts))
+    names: int = len(entry["names"])
+    contacts_type: str
+    correctness: str
     if max_contacts == 0:
-        return (-1, -1)
+        return ("skipped", "skipped")
     if max_contacts == 1:
-        contacts_type = 1
+        contacts_type = "one contact"
     else:
-        contacts_type = 2
+        contacts_type = "multiple contacts"
     if names < min_contacts:
-        names_type = 2 # type 2 error, not enough names, false negative
+        correctness = "not enough"
     elif min_contacts <= names <= max_contacts:
-        names_type = 0 # correct
+        correctness = "correct"
     else:
-        names_type = 1 # type 1 error, too many names, false positive
-    return (names_type, contacts_type)
+        correctness = "too many"
+    return (correctness, contacts_type)
 
 
 if __name__ == "__main__":
@@ -71,16 +73,17 @@ if __name__ == "__main__":
         entries.sort(key=classify)
         entry_types = {k: list(g) for k, g in itertools.groupby(entries, classify)}
         counts = Counter(map(classify, entries))
-        total = sum(counts.values()) - counts[(-1, -1)]
-        print(
-            "true positive: {:.2%}, false negative: {:.2%}"
-            ", false positive: {:.2%}".format(*[
+        total = sum(counts.values()) - counts[("skipped", "skipped")]
+        categories = ("correct", "not enough", "too many")
+        print(", ".join(
+            "{}: {:.2%}".format(
+                category,
                 sum(
-                    counts[k] for k in counts.keys() if k[0] == names_type
+                    counts[k] for k in counts.keys() if k[0] == category
                 ) / total
-                for names_type in (0, 2, 1)
-            ])
-        )
+            )
+            for category in ("correct", "not enough", "too many")
+        ))
         # padding
         header = ["line", "emails", "phones", "names"]
         rows = [
@@ -173,3 +176,6 @@ if __name__ == "__main__":
 
 # don't trust google to say nothing
 # true positive: 87.04%, false negative: 4.53%, false positive: 8.44%
+
+# after some early refactoring that wasn't checked correctly
+# correct: 86.83%, not enough: 4.53%, too many: 8.64%

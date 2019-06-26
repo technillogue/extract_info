@@ -93,6 +93,10 @@ def fuzzy_union(crude_names: List[str], google_names: List[str]) -> List[str]:
     union = []
     for crude_name in crude_names:
         if crude_name[0] not in printable:
+    #if not min_names <= len(result["names"]) <= max_names:
+    #    cases[nltk_status][google_approach][
+    #        "too much" if len(result["names"]) > max_names else "too little"
+    #    ] += 1
             union.append(crude_name)
             # google doesn't work with non-latin characters
             # so we ignore it in those cases
@@ -102,18 +106,18 @@ def fuzzy_union(crude_names: List[str], google_names: List[str]) -> List[str]:
                     union.append(crude_name)
     return union
 
-#class NameExtractor:
- #   def __init__(self):
-        #self.cases: defaultdict = defaultdict(
-        #    lambda: defaultdict(lambda: defaultdict(lambda: 0))
-        #)
-        # TODO: better metrics for breakdown of accuracy by approach
 
-def extract_names(text: str, min_names: int, max_names: int,
-                  refine: bool) -> List[str]:
+def space_dashes(text: str) -> str:
+    "put spaces around dashes without spaces"
+    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
+
+
+def extract_names(line: str, min_names: int, max_names: int,
+                  refine: bool = True) -> List[str]:
+    text = space_dashes(line)
     # get a crude attempt
     nltk_names: List[str] = nltk_extract_names(text)
-    if len(nltk_names) > min_names:
+    if len(nltk_names) >= min_names:
         crude_names = nltk_names
     else:
         crude_names = [word for word in text.split() if word[0].isupper()]
@@ -144,7 +148,3 @@ def extract_names(text: str, min_names: int, max_names: int,
             max_names
         )
     return names_filtered
-    #if not min_names <= len(result["names"]) <= max_names:
-    #    cases[nltk_status][google_approach][
-    #        "too much" if len(result["names"]) > max_names else "too little"
-    #    ] += 1
