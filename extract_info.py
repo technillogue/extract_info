@@ -1,210 +1,54 @@
 import csv
-import json
 import re
 import itertools
 import argparse
-from string import printable
-from typing import Callable, List, Dict
-from collections import defaultdict, Counter
-import nltk
-from nltk.corpus import wordnet
-from googleapiclient.errors import HttpError
-from google_analyze import analyze_entities
+from typing import List, Dict, Tuple
+from collections import Counter
 from cache import cache
+from extract_names import extract_names, extract_emails, extract_phones
 # requires python3.6+
 
-PHONE_RE = re.compile(r'(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})')
-EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+')
-
-
-# extracting info
-
-@cache.with_cache
-def extract_phones(text: str) -> List[str]:
-    "returns phone numbers in text"
-    phone_numbers = [
-        re.sub(r'\D', '', number)
-        for number in PHONE_RE.findall(text)
-    ]
-    # removes duplicates while preserving order, only works correctly in
-    # python3.6+
-    return list(dict.fromkeys(phone_numbers))
-
-@cache.with_cache
-def extract_emails(text: str) -> List[str]:
-    "returns emails in text"
-    return EMAIL_RE.findall(text)
-
-@cache.with_cache
-def extract_names(text: str) -> List[str]:
-    "returns names using NLTK Named Entity Recognition, filters out repetition"
-    names = []
-    for sentance in nltk.sent_tokenize(text):
-        for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance))):
-            if isinstance(chunk, nltk.tree.Tree):
-                if chunk.label() == 'PERSON':
-                    names.append(' '.join([c[0] for c in chunk]))
-    for name1, name2 in itertools.permutations(names, 2):
-        if name1 in name2:
-            names.remove(name1)
-    return names
-
-@cache.with_cache
-def g_extract_names(text: str) -> List[str]:
-    """
-    returns names using Google Cloud Knowledge Graph Named Entity Recognition
-    skips non-ASCII charecters
-    """
-    text = "".join(filter(printable.__contains__, text))
-    try:
-        results = analyze_entities(text)
-    except HttpError:
-        return []
-    return [
-        entity['name']
-        for entity in results['entities']
-        if entity['type'] == "PERSON"
-    ]
-
-
-def refine_names(names: List[str], min_goal: int, max_goal: int) -> List[str]:
-    "removes words that have wordnet synonyms, then maybe removes nonlatin"
-    refined_names = [
-        name
-        for name in names
-        if not any(len(wordnet.synsets(word)) > 1 for word in name.split())
-    ]
-    if len(refined_names) > max_goal:
-        pass # ADD: remove latin names
-    keep = min_goal <= len(refined_names) <= max_goal
-    if args.debug:
-        if keep:
-            print("refined {} to {}. goal: {}-{}, keeping: {}".format(
-                names,
-                refined_names,
-                min_goal,
-                max_goal,
-                keep
-            ))
-    if keep:
-        return refined_names
-    return names
 
 def space_dashes(text: str) -> str:
     "put spaces around dashes without spaces"
     return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
-def only_alpha(text: str) -> str:
-    "remove words that don't have any alphabetical chareceters or -"
-    return " ".join([
-        word for word in text.split()
-        if (word not in extract_emails(text)
-            and all((c.isalpha() or c in r"-\!$%(,.:;?") for c in word))
-    ])
-
-def every_name(names: str) -> str:
-    return "".join(map(
-        "My name is {}. ".format,
-        names
-    ))
-
-cases: defaultdict = defaultdict(
-    lambda: defaultdict(lambda: defaultdict(lambda: 0))
-)
-
 @cache.with_cache
-def extract_info(line, refine=True):
-    result = {
+def extract_info(line: str, refine: bool = True) -> Dict[str, List[str]]:
+    result: Dict[str, List[str]] = {
         "line":   [line.replace("'", "").replace("\n", "")],
         "emails": extract_emails(line),
         "phones": extract_phones(line)
     }
-    text = space_dashes(line)
-    max_contacts = max(len(result["emails"]), len(result["phones"]))
+    text: str = space_dashes(line)
+    max_contacts: int = max(len(result["emails"]), len(result["phones"]))
     if max_contacts == 0:
         result["names"] = ["skipped"]
         return result
-    # e.g. if there's 0 email and 1 phone, it's 1,
-    # but if there's 1 email and 3 phone it's 1.
-    min_contacts = max(1, min(len(result["emails"]), len(result["phones"])))
-    # preprocess
-
-    # get more names
-    name_attempt = extract_names(text)
-    if len(name_attempt) < min_contacts:
-        n_status = "n_every_cap"
-        names = [word for word in text.split() if word[0].isupper()]
-    else:
-        n_status = "n_good"
-        names = name_attempt
-    # maybe filter out names
-    if len(names) <= max_contacts:
-        names_filtered = names
-        g_approach = "no_g"
-    else:
-        # only_alpha(text), text, map(names)
-        # try to do it with google
-        approaches = (
-            lambda: only_alpha(text),
-            lambda: text,
-            lambda: every_name(names)
-        ) # unfortunately the only way to make this lazy in python
-        g_approach, g_names = next(
-            filter(
-                lambda e: bool(e[1]),
-                enumerate(
-                    g_extract_names(approach()) for approach in approaches
-                )
-            ),
-            ("g_failed", None)
-        )
-        if g_names:
-            names_filtered = [
-                name
-                for name in names
-                if name[0] not in printable or [
-                    part
-                    for g_name in g_names
-                    for part in name.split()
-                    if part in g_name
-                ]
-            ]
-        else:
-            names_filtered = names
-    # maybe refine with synset and discarding nonlatin names
-    if refine and len(names_filtered) > max_contacts:
-        result["names"] = refine_names(
-            names_filtered,
-            min_contacts,
-            max_contacts
-        )
-    else:
-        result["names"] = names_filtered
-    if not min_contacts <= len(result["names"]) <= max_contacts:
-        cases[n_status][g_approach][
-            "too much" if len(result["names"]) > max_contacts else "too little"
-        ] += 1
+    # e.g. if there's 0 email and 1 phone, min_contactsis 1,
+    # but if there's 1 email and 3 phones, min_contacts is 1, not 2.
+    min_contacts: int = max(1, min(len(result["emails"]), len(result["phones"])))
+    result["names"] = extract_names(text, min_contacts, max_contacts, refine)
     return result
 
 
-def classify(entry):
+def classify(entry: Dict[str, List[str]]) -> Tuple[int, int]:
     max_contacts = max(len(entry["emails"]), len(entry["phones"]))
     min_contacts = max(1, min(len(entry["emails"]), len(entry["phones"])))
     names = len(entry["names"])
     if max_contacts == 0:
         return (-1, -1)
+    if max_contacts == 1:
+        contacts_type = 1
     else:
-        if max_contacts == 1:
-            contacts_type = 1
-        else:
-            contacts_type = 2
-        if names < min_contacts:
-            names_type = 2 # type 2 error, not enough names, false negative
-        elif min_contacts <= names <= max_contacts:
-            names_type = 0 # correct
-        else:
-            names_type = 1 # type 1 error, too many names, false positive
-        return (names_type, contacts_type)
+        contacts_type = 2
+    if names < min_contacts:
+        names_type = 2 # type 2 error, not enough names, false negative
+    elif min_contacts <= names <= max_contacts:
+        names_type = 0 # correct
+    else:
+        names_type = 1 # type 1 error, too many names, false positive
+    return (names_type, contacts_type)
 
 
 if __name__ == "__main__":
