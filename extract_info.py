@@ -2,70 +2,20 @@ import csv
 import json
 import re
 import itertools
-import functools
-import string
 import argparse
-from typing import Callable, List
+from string import printable
+from typing import Callable, List, Dict
 from collections import defaultdict, Counter
 import nltk
 from nltk.corpus import wordnet
-from google_analyze import analyze_entities
 from googleapiclient.errors import HttpError
-
+from google_analyze import analyze_entities
+from cache import cache
 # requires python3.6+
 
 PHONE_RE = re.compile(r'(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})')
 EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+')
 
-
-class Cache:
-    """
-    non-functional cache for storing expensive computation in between
-    program runs, as a function decorator.
-    only stores the first argument and repeats it exactly once when saving
-    to disk, i.e. {arg: {func1: result1, func2: result2}, arg2: {...}, ...}
-    use finally: to make sure the cache gets saved
-    """
-    def __init__(self, cachename: str = "cache.json"):
-        self.cachename = cachename
-        self.funcs = []
-        self.cache = None
-
-    def open_cache(self):
-        try:
-            data = json.load(open(self.cachename, encoding="utf-8"))
-        except IOError:
-            data = {}
-        self.cache = defaultdict(dict, data)
-
-    def save_cache(self):
-        with open(self.cachename, "w", encoding="utf-8") as f:
-            json.dump(dict(self.cache), f)
-        print("saved cache")
-
-    def clear_cache(self, func: str):
-        for item in self.cache.values():
-            if func in item:
-                del item[func]
-
-    def with_cache(self, decorated: Callable) -> Callable:
-        func = decorated.__name__
-        self.funcs.append(func)
-        @functools.wraps(decorated)
-        def wrapper(text, *args, **kwargs):
-            try:
-                if self.cache[text][func] is not None:
-                    if not (func == "g_extract_names"
-                            and self.cache[text][func] == []):
-                        return self.cache[text][func]
-            except KeyError:
-                pass
-            value = decorated(text, *args, **kwargs)
-            self.cache[text][func] = value
-            return value
-        return wrapper
-
-cache = Cache()
 
 # extracting info
 
@@ -158,7 +108,9 @@ def every_name(names: str) -> str:
         names
     ))
 
-cases = defaultdict(lambda : defaultdict(lambda : defaultdict(lambda : 0)))
+cases: defaultdict = defaultdict(
+    lambda: defaultdict(lambda: defaultdict(lambda: 0))
+)
 
 @cache.with_cache
 def extract_info(line, refine=True):
@@ -193,9 +145,9 @@ def extract_info(line, refine=True):
         # only_alpha(text), text, map(names)
         # try to do it with google
         approaches = (
-            lambda : only_alpha(text),
-            lambda : text,
-            lambda : every_name(names)
+            lambda: only_alpha(text),
+            lambda: text,
+            lambda: every_name(names)
         ) # unfortunately the only way to make this lazy in python
         g_approach, g_names = next(
             filter(
@@ -210,7 +162,7 @@ def extract_info(line, refine=True):
             names_filtered = [
                 name
                 for name in names
-                if name[0] not in string.printable or [
+                if name[0] not in printable or [
                     part
                     for g_name in g_names
                     for part in name.split()
@@ -266,7 +218,7 @@ if __name__ == "__main__":
     if args.clear:
         cache.clear_cache("extract_info")
     try:
-        lines = list(csv.reader(open("info_edited.csv", encoding="utf-8")))[1:]
+        lines = list(csv.reader(open("data/info_edited.csv", encoding="utf-8")))[1:]
         entries = [
             extract_info(line[0], refine=args.refine)
             for line in lines
@@ -295,7 +247,7 @@ if __name__ == "__main__":
                 ""
             )
         ]
-        with open("info.csv", "w", encoding="utf-8") as f:
+        with open("data/info.csv", "w", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(header)
             writer.writerows(rows)
