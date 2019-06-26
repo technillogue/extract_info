@@ -38,9 +38,9 @@ class Cache:
         func_name = decorated.__name__
         self.func_names.append(func_name)
         @functools.wraps(decorated)
-        def wrapper(text, *args, **kwargs):
+        def wrapper(text, no_cache=False, *args, **kwargs):
             try:
-                if self.cache[text][func_name] is not None:
+                if not no_cache and self.cache[text][func_name] is not None:
                     # sometimes we've saved google saying nothing
                     # in some cases this is because of e.g. network error
                     # so we don't trust that

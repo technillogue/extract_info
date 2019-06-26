@@ -108,7 +108,6 @@ def remove_nonlatin(names: List[str]) -> List[str]:
     # to be implemented later
 
 
-
 def extract_names(line: str, min_names: int, max_names: int,
                   refine: bool = True) -> List[str]:
     text = space_dashes(line)
