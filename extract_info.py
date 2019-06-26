@@ -179,3 +179,6 @@ if __name__ == "__main__":
 
 # after some early refactoring that wasn't checked correctly
 # correct: 86.83%, not enough: 4.53%, too many: 8.64%
+
+# after tweaking refine,
+# correct: 86.42%, not enough: 5.35%, too many: 8.23%

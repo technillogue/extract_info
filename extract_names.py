@@ -8,6 +8,9 @@ from googleapiclient.errors import HttpError
 from google_analyze import analyze_entities
 from cache import cache
 
+def space_dashes(text: str) -> str:
+    "put spaces around dashes without spaces"
+    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
 PHONE_RE = re.compile(r'(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})')
 EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+')
@@ -60,21 +63,7 @@ def google_extract_names(text: str) -> List[str]:
         if entity['type'] == "PERSON"
     ]
 
-
-def refine_names(names: List[str], min_goal: int, max_goal: int) -> List[str]:
-    "removes words that have wordnet synonyms, then maybe removes nonlatin"
-    refined_names = [
-        name
-        for name in names
-        if not any(len(wordnet.synsets(word)) > 1 for word in name.split())
-    ]
-    if len(refined_names) > max_goal:
-        pass # ADD: remove latin names
-    keep = min_goal <= len(refined_names) <= max_goal
-    if keep:
-        return refined_names
-    return names
-
+## preprocessing functions to use with google
 def only_alpha(text: str) -> str:
     "remove words that don't have any alphabetical chareceters or -"
     return " ".join([
@@ -106,10 +95,18 @@ def fuzzy_union(crude_names: List[str], google_names: List[str]) -> List[str]:
                     union.append(crude_name)
     return union
 
+def remove_synonyms(names: List[str]) -> List[str]:
+    "removes words that have wordnet synonyms"
+    return [
+        name
+        for name in names
+        if not any(len(wordnet.synsets(word)) > 1 for word in name.split())
+    ]
 
-def space_dashes(text: str) -> str:
-    "put spaces around dashes without spaces"
-    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
+def remove_nonlatin(names: List[str]) -> List[str]:
+    return names
+    # to be implemented later
+
 
 
 def extract_names(line: str, min_names: int, max_names: int,
@@ -132,7 +129,7 @@ def extract_names(line: str, min_names: int, max_names: int,
             lambda: text,
             lambda: every_name(crude_names)
         ) # unfortunately the only way to make this lazy in python
-        google_names = next(filter(
+        google_names: List[str] = next(filter(
             None,
             (google_extract_names(approach()) for approach in approaches)
         ), [])
@@ -142,9 +139,7 @@ def extract_names(line: str, min_names: int, max_names: int,
             names_filtered = crude_names
     # if needed, refine with synset and discarding nonlatin names
     if refine and len(names_filtered) > max_names:
-        return refine_names(
-            names_filtered,
-            min_names,
-            max_names
-        )
+        refined_names = remove_synonyms(names_filtered)
+        if len(refined_names) <= min_names:
+            return refined_names
     return names_filtered
