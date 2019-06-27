@@ -28,7 +28,7 @@ def extract_emails(text: str) -> List[str]:
     return EMAIL_RE.findall(text)
 
 @cache.with_cache
-def extract_info(raw_line: str, **flags: bool) -> Dict[str, List[str]]:
+def extract_info(raw_line: str) -> Dict[str, List[str]]:
     line: str = raw_line.replace("'", "").replace("\n", "")
     emails: List[str] = extract_emails(line)
     phones: List[str] = extract_phones(line)
@@ -41,7 +41,7 @@ def extract_info(raw_line: str, **flags: bool) -> Dict[str, List[str]]:
     if max_contacts == 0:
         names = ["skipped"]
     else:
-        names = extract_names(line, min_contacts, max_contacts, **flags)
+        names = extract_names(line, min_contacts, max_contacts)
     return {
         "line": [line],
         "emails": emails,
@@ -76,7 +76,6 @@ def classify(entry: Dict[str, List[str]]) -> Tuple[str, str]:
 if __name__ == "__main__":
     cache.open_cache()
     parser = argparse.ArgumentParser("extract names and contact info from csv")
-    parser.add_argument("-k", "--keep", action="store_false", dest="refine")
     #parser.add_argument("-p", "--preprocess", action="store_true")
     parser.add_argument("-c", "--clear", action="store_true")
     parser.add_argument("-d", "--debug", action="store_true")
@@ -86,7 +85,7 @@ if __name__ == "__main__":
     try:
         lines = list(csv.reader(open("data/info_edited.csv", encoding="utf-8")))[1:]
         entries = [
-            extract_info(line[0], refine=args.refine)
+            extract_info(line[0])
             for line in lines
         ]
         ## counting

@@ -87,8 +87,7 @@ def remove_nonlatin(names: List[str]) -> List[str]:
     # to be implemented later
 
 
-def extract_names(line: str, min_names: int, max_names: int,
-                  refine: bool = True) -> List[str]:
+def extract_names(line: str, min_names: int, max_names: int) -> List[str]:
     text = space_dashes(line)
     # get a crude attempt
     nltk_names: List[str] = nltk_extract_names(text)
@@ -116,7 +115,7 @@ def extract_names(line: str, min_names: int, max_names: int,
         else:
             names_filtered = crude_names
     # if needed, refine with synset and discarding nonlatin names
-    if refine and len(names_filtered) > max_names:
+    if len(names_filtered) > max_names:
         refined_names = remove_synonyms(names_filtered)
         if len(refined_names) <= min_names:
             return refined_names
