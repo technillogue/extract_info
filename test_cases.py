@@ -5,6 +5,11 @@ import json
 from typing import Dict, List, Iterable, Any, Tuple
 import pytest
 import extract_info
+import extract_names
+
+def test_contains_nonlatin():
+    assert extract_names.contains_nonlatin("Stephanie") == False
+    assert extract_names.contains_nonlatin(u"Лена")
 
 Entry = Dict[str, List[str]]
 

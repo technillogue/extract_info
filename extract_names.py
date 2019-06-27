@@ -1,12 +1,12 @@
 import itertools
 import re
-from string import printable
+import string
 from typing import List
 import nltk
 from nltk.corpus import wordnet
 from googleapiclient.errors import HttpError
 from google_analyze import analyze_entities
-from cache import cache
+from utils import cache
 
 def space_dashes(text: str) -> str:
     "put spaces around dashes without spaces"
@@ -26,13 +26,17 @@ def nltk_extract_names(text: str) -> List[str]:
             names.remove(name1)
     return names
 
+
+def contains_nonlatin(text: str) -> bool:
+    return not any(string.printable.__contains__(c) for c in text)
+
 @cache.with_cache
 def google_extract_names(text: str) -> List[str]:
     """
     returns names using Google Cloud Knowledge Graph Named Entity Recognition
     skips non-ASCII charecters
     """
-    text = "".join(filter(printable.__contains__, text))
+    text = "".join(c for c in text if not contains_nonlatin(c))
     try:
         results = analyze_entities(text)
     except HttpError:
@@ -60,11 +64,7 @@ def every_name(names: List[str]) -> str:
 def fuzzy_union(crude_names: List[str], google_names: List[str]) -> List[str]:
     union = []
     for crude_name in crude_names:
-        if crude_name[0] not in printable:
-    #if not min_names <= len(result["names"]) <= max_names:
-    #    cases[nltk_status][google_approach][
-    #        "too much" if len(result["names"]) > max_names else "too little"
-    #    ] += 1
+        if contains_nonlatin(crude_name):
             union.append(crude_name)
             # google doesn't work with non-latin characters
             # so we ignore it in those cases
@@ -83,9 +83,7 @@ def remove_synonyms(names: List[str]) -> List[str]:
     ]
 
 def remove_nonlatin(names: List[str]) -> List[str]:
-    return names
-    # to be implemented later
-
+    return list(itertools.filterfalse(contains_nonlatin, names))
 
 def extract_names(line: str, min_names: int, max_names: int) -> List[str]:
     text = space_dashes(line)

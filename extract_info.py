@@ -4,7 +4,7 @@ import itertools
 import argparse
 from typing import List, Dict, Tuple
 from collections import Counter
-from cache import cache
+from utils import cache
 from extract_names import extract_names
 # requires python3.6+
 
