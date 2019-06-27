@@ -7,14 +7,15 @@ import pytest
 import extract_info
 import extract_names
 
+
 def test_contains_nonlatin():
-    assert extract_names.contains_nonlatin("Stephanie") == False
+    assert not extract_names.contains_nonlatin("Stephanie")
     assert extract_names.contains_nonlatin(u"Лена")
 
 Entry = Dict[str, List[str]]
 
 CASES: List[Entry]
-CASES = json.load(open("data/correct_cases.json"))
+CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
 
 @pytest.fixture(params=CASES)
 def correct_case(request: Any) -> Entry:
@@ -30,7 +31,10 @@ def test_cases(correct_case: Entry) -> None:
 
 
 DIFFICULT_CASES: List[Entry]
-DIFFICULT_CASES = json.load(open("data/incorrect_cases.json"))
+DIFFICULT_CASES = json.load(
+    open(
+        "data/incorrect_cases.json",
+        encoding="utf-8"))
 
 @pytest.fixture(params=DIFFICULT_CASES)
 def difficult_case(request: Any) -> Entry:
@@ -42,7 +46,6 @@ def fd_print(text: str) -> None:
 
 def fd_input(prompt: str) -> str:
     fd_print("\n{}".format(prompt))
-
     with os.fdopen(os.dup(2), "r") as stdin:
         return stdin.readline()
 
@@ -60,11 +63,13 @@ def test_difficult_cases(difficult_case: Entry) -> None:
         if correct:
             json.dump(
                 [case for case in DIFFICULT_CASES if case != difficult_case],
-                open("data/incorrect_cases.json", "w")
+                open("data/incorrect_cases.json", "w", encoding="utf-8"),
+                indent=4
             )
             json.dump(
                 CASES + [actual_case],
-                open("data/correct_case.json", "w")
+                open("data/correct_case.json", "w", encoding="utf-8"),
+                indent=4
             )
             fd_print("marked as a correct example")
     assert actual_case["names"] != difficult_case["names"]
@@ -104,9 +109,12 @@ def save_examples(entries: List[Entry], n: int, show_contact_info=False,
         for selected_type in (True, False)
     )
     assert len(correct) + len(incorrect) == len(examples)
-    import pdb;pdb.set_trace()
-    json.dump(known_correct + correct, open("data/correct_cases.json", "w"))
     json.dump(
-        known_incorrect + incorrect, open("data/incorrect_cases.json", "w")
-    )
+        known_correct + correct,
+        open("data/correct_cases.json", "w", encoding="utf-8"),
+        indent=4)
+    json.dump(
+        known_incorrect + incorrect,
+        open("data/incorrect_cases.json", "w", encoding="utf-8"),
+        indent=4)
     print(f"saved {len(correct)} correct, {len(incorrect)} incorrect examples")
