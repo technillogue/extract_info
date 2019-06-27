@@ -1,7 +1,8 @@
+import random
 import os
 import pdb
 import json
-from typing import Dict, List, Iterable, Any
+from typing import Dict, List, Iterable, Any, Tuple
 import pytest
 import extract_info
 
@@ -81,25 +82,30 @@ def classify_examples(entries: List[Entry],
             if show_contact_info:
                 print(f"PHONES: {entry['phones']}")
                 print(f"EMAILS: {entry['emails']}")
-            incorrect = bool(input(
-                "correct? (any input for no, return for yes) "
-            ))
+            incorrect = input(
+                "correct? ([y]es/no, default yes)"
+            ).lower() in ["", "y", "yes"]
+            classified += 1
             yield (incorrect, entry)
 
 
 def save_examples(entries: List[Entry], n: int, show_contact_info=False,
                   known_correct: List[Entry] = CASES,
                   known_incorrect: List[Entry] = DIFFICULT_CASES) -> None:
-    examples: Iterable[Tuple[bool, Entry]] = classify_examples(
+    examples: List[Tuple[bool, Entry]] = list(classify_examples(
         entries, n, show_contact_info,
         known_correct, known_incorrect
-    )
+    ))
     correct: List[Entry]
     incorrect: List[Entry]
     correct, incorrect = (
         [example for (type_, example) in examples if type_ == selected_type]
         for selected_type in (True, False)
     )
-    json.dump(known_correct + correct, open("data/correct_cases.json"))
-    json.dump(known_incorrect + incorrect, open("data/incorrect_cases.json"))
-
+    assert len(correct) + len(incorrect) == len(examples)
+    import pdb;pdb.set_trace()
+    json.dump(known_correct + correct, open("data/correct_cases.json", "w"))
+    json.dump(
+        known_incorrect + incorrect, open("data/incorrect_cases.json", "w")
+    )
+    print(f"saved {len(correct)} correct, {len(incorrect)} incorrect examples")
