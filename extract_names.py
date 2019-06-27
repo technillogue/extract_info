@@ -12,26 +12,6 @@ def space_dashes(text: str) -> str:
     "put spaces around dashes without spaces"
     return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
-PHONE_RE = re.compile(r'(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})')
-EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+')
-
-@cache.with_cache
-def extract_phones(text: str) -> List[str]:
-    "returns phone numbers in text"
-    phone_numbers = [
-        re.sub(r'\D', '', number)
-        for number in PHONE_RE.findall(text)
-    ]
-    # removes duplicates while preserving order, only works correctly in
-    # python3.6+
-    return list(dict.fromkeys(phone_numbers))
-
-@cache.with_cache
-def extract_emails(text: str) -> List[str]:
-    "returns emails in text"
-    return EMAIL_RE.findall(text)
-
-
 @cache.with_cache
 def nltk_extract_names(text: str) -> List[str]:
     "returns names using NLTK Named Entity Recognition, filters out repetition"
@@ -68,8 +48,7 @@ def only_alpha(text: str) -> str:
     "remove words that don't have any alphabetical chareceters or -"
     return " ".join([
         word for word in text.split()
-        if (word not in extract_emails(text)
-            and all((c.isalpha() or c in r"-\!$%(,.:;?") for c in word))
+        if all(c.isalpha() or c in r"-\!$%(,.:;?" for c in word)
     ])
 
 def every_name(names: List[str]) -> str:

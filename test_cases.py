@@ -11,7 +11,6 @@ Entry = Dict[str, List[str]]
 CASES: List[Entry]
 CASES = json.load(open("data/correct_cases.json"))
 
-
 @pytest.fixture(params=CASES)
 def correct_case(request: Any) -> Entry:
     return request.param
@@ -27,7 +26,6 @@ def test_cases(correct_case: Entry) -> None:
 
 DIFFICULT_CASES: List[Entry]
 DIFFICULT_CASES = json.load(open("data/incorrect_cases.json"))
-
 
 @pytest.fixture(params=DIFFICULT_CASES)
 def difficult_case(request: Any) -> Entry:
@@ -67,7 +65,6 @@ def test_difficult_cases(difficult_case: Entry) -> None:
     assert actual_case["names"] != difficult_case["names"]
 
 
-
 def classify_examples(entries: List[Entry],
                       n: int, show_contact_info: bool,
                       known_correct,
@@ -87,7 +84,6 @@ def classify_examples(entries: List[Entry],
             ).lower() in ["", "y", "yes"]
             classified += 1
             yield (incorrect, entry)
-
 
 def save_examples(entries: List[Entry], n: int, show_contact_info=False,
                   known_correct: List[Entry] = CASES,

@@ -1,0 +1,82 @@
+
+# preprocess, keep
+# true positive: 0.6172839506172839, false negative: 0.19547325102880658, false positive: 0.18724279835390947
+
+# don't preprocess, keep
+#true positive: 0.565843621399177, false negative: 0.24279835390946503, false positive: 0.19135802469135801
+
+#preprocess, keep [unknown change]
+#true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
+
+
+#preprocess, keep [unknown change]
+#true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
+
+
+# cleaned up, fixed preprocessing bug, one preprocessing method
+#$ python -i extract_info.py --clear
+#true positive: 0.533, false negative: 0.416, false positive: 0.0514
+
+# only compare google if it gives an answer
+#$ python -i extract_info.py --clear
+#true positive: 0.533, false negative: 0.329, false positive: 0.138
+
+# not sure what the change here is
+# $ python -i extract_info.py --clear
+#true positive: 0.591, false negative: 0.276, false positive: 0.134
+
+# check max(clean, not clean) and every capitalized word
+#true positive: 0.733, false negative: 0.105, false positive: 0.163
+
+# don't check clean
+#true positive: 0.726, false negative: 0.113, false positive: 0.16
+# however, somewhat better performance for getting the correct name imo
+
+# don't check clean but put spaces around -
+#true positive: 0.728, false negative: 0.105, false positive: 0.167
+
+# also remember to keep the dashses lol
+# true positive: 0.77, false negative: 0.109, false positive: 0.121
+
+# what if dashes but parsed correctly without fucking phone numbers
+#true positive: 0.782, false negative: 0.0885, false positive: 0.13
+
+# remove duplicate phone numbers
+# true positive: 78.19%, false negative: 8.85%, false positive: 12.96%
+
+# do things by hand? maybe some other change
+# true positive: 82.51%, false negative: 4.53%, false positive: 12.96%
+
+# add min and max contacts, give google more punctuation
+# true positive: 83.54%, false negative: 4.53%, false positive: 11.93%
+
+# send google only alpha words instead of words with alpha chars
+# true positive: 83.54%, false negative: 4.53%, false positive: 11.93%
+
+
+# a lot of errors are based on incorrectly identifying locations
+# spacy might help a lot, actually, for forming consensus
+# approches: examine every extra word to see if it's in google
+# try different preprocessing to see where google gives max results
+
+# cleaner data
+# true positive: 84.57%, false negative: 4.53%, false positive: 10.91%
+
+# refactored, maybe refine in all cases
+# true positive: 86.63%, false negative: 4.53%, false positive: 8.85%
+
+# use google to check every name seperately
+# true positive: 87.04%, false negative: 4.53%, false positive: 8.44%
+
+# actually always refine and trust google to say 'nothing'
+# true positive: 85.39%, false negative: 6.79%, false positive: 7.82%
+# welp
+
+# don't trust google to say nothing
+# true positive: 87.04%, false negative: 4.53%, false positive: 8.44%
+
+# after some early refactoring that wasn't checked correctly
+# correct: 86.83%, not enough: 4.53%, too many: 8.64%
+
+# after tweaking refine,
+# correct: 86.42%, not enough: 5.35%, too many: 8.23%
