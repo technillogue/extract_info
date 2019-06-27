@@ -64,3 +64,42 @@ def test_difficult_cases(difficult_case: Entry) -> None:
             )
             fd_print("marked as a correct example")
     assert actual_case["names"] != difficult_case["names"]
+
+
+
+def classify_examples(entries: List[Entry],
+                      n: int, show_contact_info: bool,
+                      known_correct,
+                      known_incorrect) -> Iterable[Tuple[bool, Entry]]:
+    random.shuffle(entries)
+    classified = 0
+    while classified < n and entries:
+        entry = entries.pop()
+        if entry not in known_correct and entry not in known_incorrect:
+            print(f"LINE: {entry['line']}")
+            print(f"NAMES: {entry['names']}")
+            if show_contact_info:
+                print(f"PHONES: {entry['phones']}")
+                print(f"EMAILS: {entry['emails']}")
+            incorrect = bool(input(
+                "correct? (any input for no, return for yes) "
+            ))
+            yield (incorrect, entry)
+
+
+def save_examples(entries: List[Entry], n: int, show_contact_info=False,
+                  known_correct: List[Entry] = CASES,
+                  known_incorrect: List[Entry] = DIFFICULT_CASES) -> None:
+    examples: Iterable[Tuple[bool, Entry]] = classify_examples(
+        entries, n, show_contact_info,
+        known_correct, known_incorrect
+    )
+    correct: List[Entry]
+    incorrect: List[Entry]
+    correct, incorrect = (
+        [example for (type_, example) in examples if type_ == selected_type]
+        for selected_type in (True, False)
+    )
+    json.dump(known_correct + correct, open("data/correct_cases.json"))
+    json.dump(known_incorrect + incorrect, open("data/incorrect_cases.json"))
+
