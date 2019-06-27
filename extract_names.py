@@ -1,8 +1,9 @@
-from itertools import permutations, combinations, product, filterfalse, chain
-from functools import reduce, partial
 import re
 import string
-from typing import List, Callable, Iterator
+import operator
+from itertools import permutations, combinations, product, filterfalse, chain
+from functools import reduce, partial
+from typing import List, Callable, Iterator, Tuple
 import nltk
 from nltk.corpus import wordnet
 from googleapiclient.errors import HttpError
@@ -11,9 +12,25 @@ from utils import cache, compose, identity_function
 
 Names = List[str]
 
+# general functions
+ 
 def space_dashes(text: str) -> str:
     "put spaces around dashes without spaces"
     return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
+
+def contains_nonlatin(text: str) -> bool:
+    return not any(string.printable.__contains__(c) for c in text)
+
+def len_greater_or_equal_to(n: int) -> Callable[[Names], bool]:
+    def comparer(l: Names) -> bool:
+        return n <= len(l)
+    return comparer
+
+# combinatorial functions
+
+## extractors
+
+### "crude" extractors
 
 @cache.with_cache
 def nltk_extract_names(text: str) -> Names:
@@ -30,8 +47,15 @@ def nltk_extract_names(text: str) -> Names:
     return names
 
 
-def contains_nonlatin(text: str) -> bool:
-    return not any(string.printable.__contains__(c) for c in text)
+def all_capitalized_extract_names(text: str) -> List[str]:
+    return [
+        "".join(filter(str.isalpha, word))
+        for word in text.split() if word[0].isupper()
+    ]
+
+CRUDE_EXTRACTORS = [nltk_extract_names, all_capitalized_extract_names]
+
+### google extractor and preprocessors
 
 @cache.with_cache
 def google_extract_names(text: str) -> Names:
@@ -50,7 +74,6 @@ def google_extract_names(text: str) -> Names:
         if entity['type'] == "PERSON"
     ]
 
-## preprocessing functions to use with google
 def only_alpha(text: str) -> str:
     "remove words that don't have any alphabetical chareceters or -"
     return " ".join([
@@ -58,13 +81,25 @@ def only_alpha(text: str) -> str:
         if all(c.isalpha() or c in r"-\!$%(,.:;?" for c in word)
     ])
 
-def every_name(names: Names) -> str:
+def every_name(line: str) -> str:
+    potential_names = "".join(filter(str.isalpha, line)).split()
     return "".join(map(
         "My name is {}. ".format,
-        names
+        potential_names
     ))
 
-def fuzzy_union(crude_names: Names, google_names: Names) -> Names:
+
+GOOGLE_EXTRACTORS = list(map(
+    partial(compose, google_extract_names),
+    [only_alpha, identity_function, every_name]
+))
+
+## refiners
+
+def fuzzy_union(set_pair: Tuple[Names, Names]) -> Names:
+    google_names, crude_names = set_pair
+    if google_names == []:
+        return crude_names
     union = []
     for crude_name in crude_names:
         if contains_nonlatin(crude_name):
@@ -96,46 +131,38 @@ REFINERS = [identity_function] + list(map(
     partial(reduce, compose),
     chain(*(map(
         partial(combinations, UNIQUE_REFINERS),
-        range(1, len(UNIQUE_REFINERS)))
-    ))
+        range(1, len(UNIQUE_REFINERS))
+    )))
 ))
- 
-def extract_names(line: str, min_names: int, max_names: int) -> Names:
-    text = space_dashes(line)
-    # get a crude attempt
-    nltk_names: Names = nltk_extract_names(text)
-    if len(nltk_names) >= min_names:
-        crude_names = nltk_names
-    else:
-        crude_names = [word for word in text.split() if word[0].isupper()]
-    # if we have too many names, get google's attempt
-    names_filtered: Names
-    if len(crude_names) <= max_names:
-        names_filtered = crude_names
-    else:
-        # try to do it with google
-        approaches = (
-            lambda: only_alpha(text),
-            lambda: text,
-            lambda: every_name(crude_names)
-        ) # unfortunately the only way to make this lazy in python
-        google_names: Names = next(filter(
-            None,
-            (google_extract_names(approach()) for approach in approaches)
-        ), [])
-        if google_names:
-            names_filtered = fuzzy_union(crude_names, google_names)
-        else:
-            names_filtered = crude_names
-    consensuses = [names_filtered]
 
+def extract_names(line: str, min_names: int, max_names: int) -> Names:
+    text: str = space_dashes(line)
+    def min_criteria(names: Names) -> bool:
+        return len(names) >= min_names
+    google_extractions: Iterator[Names] = chain(filter(
+        min_criteria,
+        (extractor(text) for extractor in GOOGLE_EXTRACTORS)
+    ), [[]]) # if google can't return anything, we want list(google_extractions
+    # to be [[]] not [] 
+    crude_extractions: Iterator[Names] = filter(
+        min_criteria,
+        (extractor(text) for extractor in CRUDE_EXTRACTORS)
+    )
+    consensuses: Iterator[Names] = filter(
+        min_criteria,
+        map(fuzzy_union, product(google_extractions, crude_extractions))
+    )
     refined_consensuses: Iterator[Names] = (
         refine(consensus)
         for consensus, refine in product(consensuses, REFINERS)
     )
+    last_consensus = []
     while True:
         try:
-            last_consensus = next(refined_consensuses)
+            last_consensus: Names = next(refined_consensuses)
+            # if we get too many names and none of the refiniers work
+            # we can use this to the last version
+            # but if we can never find enough names, this will fail 
             if min_names <= len(last_consensus) <= max_names:
                 return last_consensus
         except StopIteration:

@@ -17,6 +17,19 @@ Entry = Dict[str, List[str]]
 CASES: List[Entry]
 CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
 
+
+def test_no_google():
+    actual = extract_names.extract_names(
+        "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
+        1, 1)
+    expected = ["Lisa"]
+    if actual != expected:
+        pdb.set_trace()
+        extract_names.extract_names(
+                "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
+                1, 1)
+    assert actual == expected
+
 @pytest.fixture(params=CASES)
 def correct_case(request: Any) -> Entry:
     return request.param
@@ -49,6 +62,17 @@ def fd_input(prompt: str) -> str:
     with os.fdopen(os.dup(2), "r") as stdin:
         return stdin.readline()
 
+def ask(case: Dict, show_contact_info: bool = False) -> bool:
+    fd_print(f"\nLINE: {entry['line']}")
+    fd_print(f"NAMES: {entry['names']}")
+    if show_contact_info:
+        fd_print(f"PHONES: {entry['phones']}")
+        fd_print(f"EMAILS: {entry['emails']}")
+    correctness = fd_input(
+        "correct? ([y]es/no, default yes)"
+    ).lower() in ["", "y", "yes"]
+    return correctness
+
 @pytest.mark.xfail
 def test_difficult_cases(difficult_case: Entry) -> None:
     """these are examples that were marked as incorrect, if we have
@@ -56,10 +80,7 @@ def test_difficult_cases(difficult_case: Entry) -> None:
     line = difficult_case["line"][0]
     actual_case: Entry = extract_info.extract_info(line, no_cache=True)
     if actual_case["names"] != difficult_case["names"]:
-        fd_print(repr(actual_case))
-        correct: str = fd_input(
-            "is that right? (<ret> for no, anything else for yes)"
-        )
+        correct = ask(actual_case)
         if correct:
             json.dump(
                 [case for case in DIFFICULT_CASES if case != difficult_case],
@@ -68,7 +89,7 @@ def test_difficult_cases(difficult_case: Entry) -> None:
             )
             json.dump(
                 CASES + [actual_case],
-                open("data/correct_case.json", "w", encoding="utf-8"),
+                open("data/correct_cases.json", "w", encoding="utf-8"),
                 indent=4
             )
             fd_print("marked as a correct example")
@@ -84,16 +105,9 @@ def classify_examples(entries: List[Entry],
     while classified < n and entries:
         entry = entries.pop()
         if entry not in known_correct and entry not in known_incorrect:
-            print(f"LINE: {entry['line']}")
-            print(f"NAMES: {entry['names']}")
-            if show_contact_info:
-                print(f"PHONES: {entry['phones']}")
-                print(f"EMAILS: {entry['emails']}")
-            incorrect = input(
-                "correct? ([y]es/no, default yes)"
-            ).lower() in ["", "y", "yes"]
+            correctness = ask(entry)
             classified += 1
-            yield (incorrect, entry)
+            yield (correctness, entry)
 
 def save_examples(entries: List[Entry], n: int, show_contact_info=False,
                   known_correct: List[Entry] = CASES,
