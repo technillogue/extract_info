@@ -1,6 +1,8 @@
 import json
 import functools
-from typing import List, Dict, Callable, Any, Union, Iterator
+from typing import (
+    List, Dict, Callable, Any, Union, Iterator, TypeVar, Optional
+)
 from collections import defaultdict
 
 Names = List[str]
@@ -15,8 +17,10 @@ def compose(f: Callable[[TextOrNames], Names],
         return f(g(arg))
     return composed_function
 
-def soft_filter(predicate: Callable[[Any], bool],
-                seq: Iterator, default_if_empty: Any = None) -> Iterator:
+X = TypeVar("X")
+
+def soft_filter(predicate: Callable[[X], bool], seq: Iterator[X],
+                default_if_empty: Optional[X] = None) -> Iterator[X]:
     """filter, but always returning at least one item.
     if iter is empty, return default_if_empty
     otherwise, if none of the items in iter satisfy predicate, return the last
@@ -70,40 +74,42 @@ class Cache:
 
     def clever_clear_cache(self) -> None:
         import csv
-        lines = set(csv.reader(open("data/info_edited.csv")))
-        keep = lines.union(self.cache)
-        keep_funcs = ["google_extract_names"]
+        lines = set(
+            line[0] for line in csv.reader(open("data/info_edited.csv"))
+        )
+        keep = lines.intersection(self.cache)
+        keep_funcs = set(("google_extract_names",))
         self.cache = {
             key: {
                 func: self.cache[key][func]
-                for func in keep_funcs
+                for func in keep_funcs.intersection(set(self.cache[key].keys()))
             }
             for key in keep
         }
-        self.save_cache
+        self.save_cache()
 
     def with_cache(self, decorated: Callable) -> Callable:
         func_name = decorated.__name__
         self.func_names.append(func_name)
         @functools.wraps(decorated)
-        def wrapper(text: Union[str, List[str]], *args: Any,
+        def wrapper(arg1: Union[str, List[str]], *args: Any,
                     no_cache: bool = False, **kwargs: Any) -> Any:
-            if isinstance(text, list):
-                if any(":" in word for word in text):
-                    raise Exception(f"can't serialize {' '.join(text)}")
-                text = ":".join(text)
+            if isinstance(arg1, list):
+                key = json.dumps(arg1)
+            else:
+                key = arg1
             try:
-                if not no_cache and self.cache[text][func_name] is not None:
+                if not no_cache and self.cache[key][func_name] is not None:
                     # sometimes we've saved google saying nothing
                     # in some cases this is because of e.g. network error
                     # so we don't trust that
-                    if not (func_name == "g_extract_names"
-                            and self.cache[text][func_name] == []):
-                        return self.cache[text][func_name]
+                    if not (func_name == "google_extract_names"
+                            and self.cache[key][func_name] == []):
+                        return self.cache[key][func_name]
             except KeyError:
                 pass
-            value = decorated(text, *args, **kwargs)
-            self.cache[text][func_name] = value
+            value = decorated(arg1, *args, **kwargs)
+            self.cache[key][func_name] = value
             return value
         return wrapper
 

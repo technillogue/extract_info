@@ -64,18 +64,19 @@ def google_extract_names(text: str) -> Names:
     return google_analyze.extract_entities(text)
 
 # check if simplifying this logic reduces accuracy
+@cache.with_cache
 def only_alpha(text: str) -> str:
     "remove words that don't have any alphabetical chareceters or -"
     return " ".join([
         word for word in text.split()
         if all(c.isalpha() or c in r"-\!$%(,.:;?" for c in word)
     ])
-
+@cache.with_cache
 def every_name(line: str) -> str:
-    potential_names = "".join(filter(str.isalpha, line)).split()
+    open("every_name_ex", "a").write(line + "\n")
     return "".join(map(
         "My name is {}. ".format,
-        potential_names
+        only_alpha(line).split()
     ))
 
 
@@ -113,6 +114,9 @@ def remove_synonyms(names: Names) -> Names:
 
 def remove_nonlatin(names: Names) -> Names:
     return list(filterfalse(contains_nonlatin, names))
+
+def remove_short(names: Names) -> Names:
+    return [name for name in names if len(name) > 2]
 
 UNIQUE_REFINERS = [remove_synonyms, remove_nonlatin]
 

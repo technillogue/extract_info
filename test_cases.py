@@ -8,6 +8,28 @@ import extract_info
 import extract_names
 import utils
 
+def show_all_extractions(text: str) -> Dict[str, List[str]]:
+    return {
+        "google_extractions":
+            [extractor(text) for extractor in extract_names.GOOGLE_EXTRACTORS],
+        "crude_extractions":
+            [extractor(text) for extractor in extract_names.CRUDE_EXTRACTORS]
+    }
+    
+    '''consensuses: Iterator[Names] = filter(
+        min_criteria,
+        map(fuzzy_union, product(google_extractions, crude_extractions))
+    )
+    refined_consensuses: Iterator[Names] = soft_filter(
+        lambda consensus: min_names <= len(consensus) <= max_names,
+        (
+            refine(consensus)
+            for consensus, refine in product(consensuses, REFINERS)
+        )
+    )
+ 
+
+'''
 def test_soft_filter() -> None:
     assert list(utils.soft_filter(lambda i: True, iter([]))) == [[]]
     assert list(utils.soft_filter(lambda i: i < 0, iter(range(10)))) == [9]
@@ -15,15 +37,34 @@ def test_soft_filter() -> None:
         0, 2, 4, 6, 8
     ]
 
+def test_cache() -> None:
+    global hypothetical_google_api_charges
+    hypothetical_google_api_charges = 0
+    utils.cache.clear_cache("machine_learning_powered_echo")
+    @utils.cache.with_cache
+    def machine_learning_powered_echo(x: Any) -> Any:
+        global hypothetical_google_api_charges
+        hypothetical_google_api_charges += 1
+        return x
+    machine_learning_powered_echo("foo")
+    machine_learning_powered_echo("foo")
+    assert hypothetical_google_api_charges == 1
+    utils.cache.clear_cache("machine_learning_powered_echo")
+    machine_learning_powered_echo("foo")
+    assert hypothetical_google_api_charges == 2
+    assert machine_learning_powered_echo([]) == []
+    assert machine_learning_powered_echo(["foo"]) == ["foo"]
+    utils.cache.clear_cache("machine_learning_powered_echo")
+
 def test_contains_nonlatin() -> None:
     assert not extract_names.contains_nonlatin("Stephanie")
     assert extract_names.contains_nonlatin(u"Лена")
 
-Entry = Dict[str, List[str]]
-
-CASES: List[Entry]
-CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
-
+def test_every_name() -> None:
+    assert extract_names.every_name(
+        "3/14 Planet Fitness McCall 603-750-0001 X 119 Paid cr card"
+    ) == ("My name is Planet. My name is Fitness. My name is McCall. "
+          "My name is X. My name is Paid. My name is cr. My name is card. ")
 
 def test_no_google() -> None:
     actual = extract_names.extract_names(
@@ -37,6 +78,14 @@ def test_no_google() -> None:
             1, 1
         )
     assert actual == expected
+
+
+Entry = Dict[str, List[str]]
+
+CASES: List[Entry]
+CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
+
+
 
 @pytest.fixture(params=CASES)
 def correct_case(request: Any) -> Entry:
@@ -142,3 +191,7 @@ def save_examples(entries: List[Entry], n: int,
         open("data/incorrect_cases.json", "w", encoding="utf-8"),
         indent=4)
     print(f"saved {len(correct)} correct, {len(incorrect)} incorrect examples")
+
+def test_last() -> None:
+    # fake test
+    utils.cache.save_cache()

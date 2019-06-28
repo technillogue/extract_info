@@ -86,3 +86,7 @@
 
 # after starting to use combinatorial extraction
 # correct: 87.86%, not enough: 3.91%, too many: 8.23% 
+
+# fixing some bugs and imporoving performance, also max_names = sum(contact_counts)
+# instead of max(contact_counts) -- not sure if merged
+# correct: 88.48%, not enough: 4.53%, too many: 7.00%

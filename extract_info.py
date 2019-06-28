@@ -33,7 +33,7 @@ def extract_info(raw_line: str) -> Dict[str, List[str]]:
     emails: List[str] = extract_emails(line)
     phones: List[str] = extract_phones(line)
     contact_counts: Tuple[int, int] = (len(emails), len(phones))
-    max_contacts: int = max(contact_counts)
+    max_contacts: int = sum(contact_counts)
     # if there's 1 email and 3 phones, min_contacts should be 1
     # but if there's 0 email and 1 phone, it should be 1, not 0
     min_contacts: int = max(1, min(contact_counts))
