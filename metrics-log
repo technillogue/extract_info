@@ -83,3 +83,6 @@
 
 # after using the combinatorial refine
 # correct: 87.85%, not enough 4.53%, too many: 7.61%
+
+# after starting to use combinatorial extraction
+# correct: 87.86%, not enough: 3.91%, too many: 8.23% 

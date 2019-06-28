@@ -6,9 +6,16 @@ from typing import Dict, List, Iterable, Any, Tuple
 import pytest
 import extract_info
 import extract_names
+import utils
 
+def test_soft_filter() -> None:
+    assert list(utils.soft_filter(lambda i: True, iter([]))) == [[]]
+    assert list(utils.soft_filter(lambda i: i < 0, iter(range(10)))) == [9]
+    assert list(utils.soft_filter(lambda i: i % 2 == 0, iter(range(10)))) == [
+        0, 2, 4, 6, 8
+    ]
 
-def test_contains_nonlatin():
+def test_contains_nonlatin() -> None:
     assert not extract_names.contains_nonlatin("Stephanie")
     assert extract_names.contains_nonlatin(u"Лена")
 
@@ -18,7 +25,7 @@ CASES: List[Entry]
 CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
 
 
-def test_no_google():
+def test_no_google() -> None:
     actual = extract_names.extract_names(
         "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
         1, 1)
@@ -26,8 +33,9 @@ def test_no_google():
     if actual != expected:
         pdb.set_trace()
         extract_names.extract_names(
-                "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
-                1, 1)
+            "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
+            1, 1
+        )
     assert actual == expected
 
 @pytest.fixture(params=CASES)
@@ -53,9 +61,9 @@ DIFFICULT_CASES = json.load(
 def difficult_case(request: Any) -> Entry:
     return request.param
 
-def fd_print(text: str) -> None:
+def fd_print(text: str, end: str = "\n") -> None:
     with os.fdopen(os.dup(1), "w") as stdout:
-        stdout.write(text)
+        stdout.write(text + end)
 
 def fd_input(prompt: str) -> str:
     fd_print("\n{}".format(prompt))
@@ -63,13 +71,13 @@ def fd_input(prompt: str) -> str:
         return stdin.readline()
 
 def ask(case: Dict, show_contact_info: bool = False) -> bool:
-    fd_print(f"\nLINE: {entry['line']}")
-    fd_print(f"NAMES: {entry['names']}")
+    fd_print(f"\nLINE: {case['line']}")
+    fd_print(f"NAMES: {case['names']}")
     if show_contact_info:
-        fd_print(f"PHONES: {entry['phones']}")
-        fd_print(f"EMAILS: {entry['emails']}")
+        fd_print(f"PHONES: {case['phones']}")
+        fd_print(f"EMAILS: {case['emails']}")
     correctness = fd_input(
-        "correct? ([y]es/no, default yes)"
+        "correct? ([y]es/no, default yes) "
     ).lower() in ["", "y", "yes"]
     return correctness
 
@@ -98,18 +106,20 @@ def test_difficult_cases(difficult_case: Entry) -> None:
 
 def classify_examples(entries: List[Entry],
                       n: int, show_contact_info: bool,
-                      known_correct,
-                      known_incorrect) -> Iterable[Tuple[bool, Entry]]:
+                      known_correct: List[Entry],
+                      known_incorrect: List[Entry]
+                      ) -> Iterable[Tuple[bool, Entry]]:
     random.shuffle(entries)
     classified = 0
     while classified < n and entries:
         entry = entries.pop()
         if entry not in known_correct and entry not in known_incorrect:
-            correctness = ask(entry)
+            correctness = ask(entry, show_contact_info)
             classified += 1
             yield (correctness, entry)
 
-def save_examples(entries: List[Entry], n: int, show_contact_info=False,
+def save_examples(entries: List[Entry], n: int,
+                  show_contact_info: bool = False,
                   known_correct: List[Entry] = CASES,
                   known_incorrect: List[Entry] = DIFFICULT_CASES) -> None:
     examples: List[Tuple[bool, Entry]] = list(classify_examples(

@@ -42,8 +42,6 @@ def extract_info(raw_line: str) -> Dict[str, List[str]]:
         names = ["skipped"]
     else:
         names = extract_names(line, min_contacts, max_contacts)
-    if "error" in names[0]:
-        import pdb; pdb.set_trace()
     return {
         "line": [line],
         "emails": emails,

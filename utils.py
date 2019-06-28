@@ -1,19 +1,40 @@
 import json
 import functools
-from typing import List, Dict, Callable, Any, Union
+from typing import List, Dict, Callable, Any, Union, Iterator
 from collections import defaultdict
-
-def identity_function(x: Any) -> Any:
-    return x
 
 Names = List[str]
 TextOrNames = Union[str, Names]
+
+def identity_function(x: Any) -> Any:
+    return x
 
 def compose(f: Callable[[TextOrNames], Names],
             g: Callable[[TextOrNames], TextOrNames]) -> Callable:
     def composed_function(arg: TextOrNames) -> Names:
         return f(g(arg))
     return composed_function
+
+def soft_filter(predicate: Callable[[Any], bool],
+                seq: Iterator, default_if_empty: Any = None) -> Iterator:
+    """filter, but always returning at least one item.
+    if iter is empty, return default_if_empty
+    otherwise, if none of the items in iter satisfy predicate, return the last
+    item in iter"""
+    if default_if_empty is None:
+        default_if_empty = []
+    last = default_if_empty
+    empty = True
+    while True:
+        try:
+            last = next(seq)
+            if predicate(last):
+                empty = False
+                yield last
+        except StopIteration:
+            if empty:
+                yield last
+            break
 
 
 class Cache:
@@ -47,11 +68,30 @@ class Cache:
             if func_name in item:
                 del item[func_name]
 
+    def clever_clear_cache(self) -> None:
+        import csv
+        lines = set(csv.reader(open("data/info_edited.csv")))
+        keep = lines.union(self.cache)
+        keep_funcs = ["google_extract_names"]
+        self.cache = {
+            key: {
+                func: self.cache[key][func]
+                for func in keep_funcs
+            }
+            for key in keep
+        }
+        self.save_cache
+
     def with_cache(self, decorated: Callable) -> Callable:
         func_name = decorated.__name__
         self.func_names.append(func_name)
         @functools.wraps(decorated)
-        def wrapper(text: str, *args, no_cache=False, **kwargs) -> Any:
+        def wrapper(text: Union[str, List[str]], *args: Any,
+                    no_cache: bool = False, **kwargs: Any) -> Any:
+            if isinstance(text, list):
+                if any(":" in word for word in text):
+                    raise Exception(f"can't serialize {' '.join(text)}")
+                text = ":".join(text)
             try:
                 if not no_cache and self.cache[text][func_name] is not None:
                     # sometimes we've saved google saying nothing
