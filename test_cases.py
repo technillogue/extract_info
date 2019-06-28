@@ -8,7 +8,7 @@ import extract_info
 import extract_names
 import utils
 
-def show_all_extractions(text: str) -> Dict[str, List[str]]:
+def show_all_extractions(text: str) -> Dict[str, List[List[str]]]:
     return {
         "google_extractions":
             [extractor(text) for extractor in extract_names.GOOGLE_EXTRACTORS],

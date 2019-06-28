@@ -112,6 +112,7 @@ def remove_synonyms(names: Names) -> Names:
         if not any(len(wordnet.synsets(word)) > 1 for word in name.split())
     ]
 
+@cache.with_cache
 def remove_nonlatin(names: Names) -> Names:
     return list(filterfalse(contains_nonlatin, names))
 

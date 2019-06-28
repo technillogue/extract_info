@@ -90,3 +90,6 @@
 # fixing some bugs and imporoving performance, also max_names = sum(contact_counts)
 # instead of max(contact_counts) -- not sure if merged
 # correct: 88.48%, not enough: 4.53%, too many: 7.00%
+
+# reloading the cache on the same?
+# correct: 92.59%, not enough 4.53%, too many: 2.86%

@@ -1,9 +1,9 @@
+import sys
 import csv
 import re
 import itertools
 import argparse
 from typing import List, Dict, Tuple
-from collections import Counter
 from utils import cache
 from extract_names import extract_names
 # requires python3.6+
@@ -28,7 +28,7 @@ def extract_emails(text: str) -> List[str]:
     return EMAIL_RE.findall(text)
 
 @cache.with_cache
-def extract_info(raw_line: str) -> Dict[str, List[str]]:
+def extract_info(raw_line: str, flags: bool=False) -> Dict[str, List[str]]:
     line: str = raw_line.replace("'", "").replace("\n", "")
     emails: List[str] = extract_emails(line)
     phones: List[str] = extract_phones(line)
@@ -42,36 +42,26 @@ def extract_info(raw_line: str) -> Dict[str, List[str]]:
         names = ["skipped"]
     else:
         names = extract_names(line, min_contacts, max_contacts)
-    return {
+    print(".", end="")
+    sys.stdout.flush()
+    result = {
         "line": [line],
         "emails": emails,
         "phones": phones,
         "names": names
     }
-
-def classify(entry: Dict[str, List[str]]) -> Tuple[str, str]:
-    contact_counts: Tuple[int, int] = (
-        len(entry["emails"]), len(entry["phones"])
-    )
-    max_contacts: int = max(contact_counts)
-    min_contacts: int = max(1, min(contact_counts))
-    names: int = len(entry["names"])
-    contacts_type: str
-    correctness: str
-    if max_contacts == 0:
-        return ("skipped", "skipped")
-    if max_contacts == 1:
-        contacts_type = "one contact"
-    else:
-        contacts_type = "multiple contacts"
-    if names < min_contacts:
-        correctness = "not enough"
-    elif min_contacts <= names <= max_contacts:
-        correctness = "correct"
-    else:
-        correctness = "too many"
-    return (correctness, contacts_type)
-
+    if flags:
+        return {
+            **result,
+            "flags": ["skipped"] if not max_contacts else [
+                "one contact" if max_contacts == 1 else "multiple contacts",
+                "not enough" if len(names) < min_contacts else (
+                    "correct" if len(names) <= max_contacts else "too many"
+                ),
+                "all"
+            ]
+        }
+    return result
 
 if __name__ == "__main__":
     cache.open_cache()
@@ -85,21 +75,25 @@ if __name__ == "__main__":
     try:
         lines = list(csv.reader(open("data/info_edited.csv", encoding="utf-8")))[1:]
         entries = [
-            extract_info(line[0])
+            extract_info(line[0], flags=True)
             for line in lines
         ]
-        ## counting
-        entries.sort(key=classify)
-        entry_types = {k: list(g) for k, g in itertools.groupby(entries, classify)}
-        counts = Counter(map(classify, entries))
-        total = sum(counts.values()) - counts[("skipped", "skipped")]
-        categories = ("correct", "not enough", "too many")
+        entry_types = {
+            flag: [entry for entry in entries if flag in entry["flags"]]
+            for flag in [
+                "too many", "correct", "not enough",
+                "multiple contacts", "one contact",
+                "all"
+            ]
+        }
+        counts = dict(zip(
+            entry_types.keys(),
+            map(len, entry_types.values())
+        ))
         print(", ".join(
             "{}: {:.2%}".format(
                 category,
-                sum(
-                    counts[k] for k in counts.keys() if k[0] == category
-                ) / total
+                counts[category] / counts["all"]
             )
             for category in ("correct", "not enough", "too many")
         ))

@@ -26,7 +26,7 @@ def soft_filter(predicate: Callable[[X], bool], seq: Iterator[X],
     otherwise, if none of the items in iter satisfy predicate, return the last
     item in iter"""
     if default_if_empty is None:
-        default_if_empty = []
+        default_if_empty: X = []
     last = default_if_empty
     empty = True
     while True:
