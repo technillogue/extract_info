@@ -19,27 +19,6 @@ def compose(f: Callable[[TextOrNames], Names],
 
 X = TypeVar("X")
 
-def soft_filter(predicate: Callable[[X], bool], seq: Iterator[X],
-                default_if_empty: Union[X, None, List] = None) -> Iterator[X]:
-    """filter, but always returning at least one item.
-    if iter is empty, return default_if_empty
-    otherwise, if none of the items in iter satisfy predicate, return the last
-    item in iter"""
-    if default_if_empty is None:
-        default_if_empty: X = []
-    last = default_if_empty
-    empty = True
-    while True:
-        try:
-            last = next(seq)
-            if predicate(last):
-                empty = False
-                yield last
-        except StopIteration:
-            if empty:
-                yield last
-            break
-
 
 class Cache:
     """
@@ -104,6 +83,7 @@ class Cache:
     def with_cache(self, decorated: Callable) -> Callable:
         func_name = decorated.__name__
         self.func_names.append(func_name)
+        # optimize this a bit
         @functools.wraps(decorated)
         def wrapper(arg1: Union[str, List[str]], *args: Any,
                     no_cache: bool = False, **kwargs: Any) -> Any:

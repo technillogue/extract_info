@@ -1,14 +1,14 @@
 import re
 import string
 from itertools import (
-    permutations, combinations, product, filterfalse, chain#, starmap
+    permutations, combinations, filterfalse, chain, tee#starmap
 )
 from functools import reduce, partial
-from typing import List, Callable, Iterator, Tuple, Sequence
+from typing import List, Callable, Iterator, Sequence, Tuple
 import nltk
 from nltk.corpus import wordnet
 import google_analyze
-from utils import cache, compose, identity_function, soft_filter
+from utils import cache, compose, identity_function
 
 Names = List[str]
 
@@ -89,19 +89,17 @@ GOOGLE_EXTRACTORS = list(map(
 
 ## refiners
 
-def fuzzy_intersect(google_names: Names, crude_names: Names) -> Names:
-    if google_names == []:
-        return crude_names
-    intersect = []
-    for crude_name in crude_names:
-        if contains_nonlatin(crude_name):
-            intersect.append(crude_name)
-            # google doesn't work with non-latin characters
-            # so we ignore it in those cases
-        else:
-            for google_name in google_names:
-                if [part for part in crude_name.split() if part in google_name]:
-                    intersect.append(crude_name)
+def fuzzy_intersect(left_names: Names, right_names: Names) -> Names:
+    if left_names == []:
+        return right_names
+    if right_names == []:
+        return left_names
+    intersect = [
+        min(left_name, right_name, key=len)
+        for left_name in left_names
+        for right_name in right_names
+        if any(part in left_name for part in right_name.split())
+    ]
     return intersect
 
 @cache.with_cache
@@ -113,16 +111,10 @@ def remove_synonyms(names: Names) -> Names:
         if not any(len(wordnet.synsets(word)) > 1 for word in name.split())
     ]
 
-@cache.with_cache
-def remove_nonlatin(names: Names) -> Names:
-    """ keep names that contain no nonlatin chars"""
-    return list(filterfalse(contains_nonlatin, names))
-    # this is .5 usec faster than using a comprehension
-
 def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
 
-UNIQUE_REFINERS = [remove_short, remove_synonyms, remove_nonlatin]
+UNIQUE_REFINERS = [remove_short, remove_synonyms]
 
 REFINERS: Sequence[Callable[[Names], Names]]
 REFINERS = [identity_function] + list(map(
@@ -133,36 +125,51 @@ REFINERS = [identity_function] + list(map(
     )))
 ))
 
+
+def refine_consensuses(consensuses: Iterator[Tuple[Names, Names]],
+                       min_names: int, max_names: int,
+                       refiners: Sequence[Callable] = REFINERS
+                      ) -> Iterator[Names]:
+    refined_consensuses, fallback_probe, fallback = tee((
+        refine(consensus)
+        for nonlatin, latin in consensuses
+        for refine in refiners
+        for consensus in ([nonlatin + latin, latin] if nonlatin else [latin])
+    ), 3)
+    for refined_consensus in refined_consensuses:
+        if min_names <= len(refined_consensus) <= max_names:
+            yield refined_consensus
+    # after checking if all of them satisfy the conditions
+    # give the one that came the closest
+    best = max if max(map(len, fallback_probe), default=0) < min_names else min
+    yield best(
+        fallback, key=len, default=[]
+    )
+
+
 def extract_names(line: str, min_names: int, max_names: int) -> Names:
     text: str = space_dashes(line)
-    def min_criteria(names: Names) -> bool:
-        return len(names) >= min_names
-    # does it contain nonlatin?
-    google_extractions: Iterator[Names] = soft_filter(
-        min_criteria,
+    def min_criteria(partioned: Tuple[Names, Names]) -> bool:
+        return sum(map(len, partioned)) > min_names
+    google_extractions: Iterator[Names] = chain(filter(
+        None, # i.e. lambda item: bool(item)
         (extractor(text) for extractor in GOOGLE_EXTRACTORS)
-    ) # if so, google needs to return min_names - nonlatin names
-    crude_extractions: Iterator[Names] = soft_filter(
-        min_criteria,
-        (extractor(text) for extractor in CRUDE_EXTRACTORS)
-    ) # set aside any nonlatin results
-    consensuses: Iterator[Names] = soft_filter(
-        min_criteria,
-        (fuzzy_intersect(google_extraction, crude_extraction)
-         for google_extraction in google_extractions
-         for crude_extraction in crude_extractions)
+    ), [[]])
+    crude_extractions: Iterator[Tuple[Names, Names]] = (
+        (list(filter(contains_nonlatin, names)), # e.g. cyrillic  names
+         list(filterfalse(contains_nonlatin, names))) # then latin names
+        for names in chain(filter(
+            min_criteria,
+            (extractor(text) for extractor in CRUDE_EXTRACTORS)
+        ), [[]])
     )
-    # equal intersect, don't special-case google
-    # latin_consensuses = .. as above ...
-    # all_consensuses = filter(
-    #   min_criteria,
-    #   map(
-    #       lambda tuple:tuple[0]+tuple[1],
-    #       product([nonlatin_names, []], latin_consensues)
-    #   )
-    #   r1, r2, remove_nonlatin, remove_nonlatin(r1(, ...
-    refined_consensuses: Iterator[Names] = soft_filter(
-        lambda consensus: min_names <= len(consensus) <= max_names,
-        (refine(consensus) for consensus in consensuses for refine in REFINERS)
+    consensuses: Iterator[Tuple[Names, Names]] = filter(min_criteria, (
+        (nonlatin_names, fuzzy_intersect(google_extraction, crude_extraction))
+        for google_extraction in google_extractions
+        for nonlatin_names, crude_extraction in crude_extractions
+    ))
+    refined_consensuses = refine_consensuses(
+        (consensus for consensus in consensuses if min_criteria(consensus)),
+        min_names, max_names
     )
     return next(refined_consensuses)

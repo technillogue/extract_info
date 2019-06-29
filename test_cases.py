@@ -28,14 +28,6 @@ def show_all_extractions(text: str) -> Dict[str, List[List[str]]]:
     #     )
     # )
 
-
-def test_soft_filter() -> None:
-    assert list(utils.soft_filter(lambda i: True, iter([]))) == [[]]
-    assert list(utils.soft_filter(lambda i: i < 0, iter(range(10)))) == [9]
-    assert list(utils.soft_filter(lambda i: i % 2 == 0, iter(range(10)))) == [
-        0, 2, 4, 6, 8
-    ]
-
 def test_cache() -> None:
     global number_of_limbs_owed_to_google
     number_of_limbs_owed_to_google = 0

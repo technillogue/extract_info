@@ -93,3 +93,8 @@
 
 # reloading the cache on the same?
 # correct: 92.59%, not enough 4.53%, too many: 2.86%
+
+# refactored statistics; corrected intersect, fiddled with combinatorials,
+# added logging; tweaked nonlatin filtering; removed rechecking empty google
+# correct: 91.56%, not enough 4.73%, too many: 3.70%
+# took 384 seconds to run (an improvement over half an hour!)
