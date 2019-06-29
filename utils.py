@@ -112,9 +112,7 @@ class Cache:
             else:
                 key = arg1
             try:
-                if (not no_cache and self.cache[key][func_name] is not None
-                        and not (func_name == "google_extract_names" and
-                                 self.cache[key][func_name] == [])):
+                if (not no_cache and self.cache[key][func_name] is not None):
                     # sometimes we've saved google saying nothing
                     # in some cases this is because of e.g. network error
                     # so we don't trust that
