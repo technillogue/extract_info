@@ -1,10 +1,8 @@
 """Analyzes text using the Google Cloud Natural Language API."""
 
-import json
-import sys
+from typing import List
 import googleapiclient.discovery
 from googleapiclient.errors import HttpError
-from typing import List
 
 def extract_entities(text: str, encoding: str = 'UTF32') -> List[str]:
     try:

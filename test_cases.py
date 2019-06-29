@@ -15,21 +15,20 @@ def show_all_extractions(text: str) -> Dict[str, List[List[str]]]:
         "crude_extractions":
             [extractor(text) for extractor in extract_names.CRUDE_EXTRACTORS]
     }
-    
-    '''consensuses: Iterator[Names] = filter(
-        min_criteria,
-        map(fuzzy_union, product(google_extractions, crude_extractions))
-    )
-    refined_consensuses: Iterator[Names] = soft_filter(
-        lambda consensus: min_names <= len(consensus) <= max_names,
-        (
-            refine(consensus)
-            for consensus, refine in product(consensuses, REFINERS)
-        )
-    )
- 
+  
+    # consensuses: Iterator[Names] = filter(
+    #     min_criteria,
+    #     map(fuzzy_intersect, product(google_extractions, crude_extractions))
+    # )
+    # refined_consensuses: Iterator[Names] = soft_filter(
+    #     lambda consensus: min_names <= len(consensus) <= max_names,
+    #     (
+    #         refine(consensus)
+    #         for consensus, refine in product(consensuses, REFINERS)
+    #     )
+    # )
 
-'''
+
 def test_soft_filter() -> None:
     assert list(utils.soft_filter(lambda i: True, iter([]))) == [[]]
     assert list(utils.soft_filter(lambda i: i < 0, iter(range(10)))) == [9]
@@ -38,23 +37,63 @@ def test_soft_filter() -> None:
     ]
 
 def test_cache() -> None:
-    global hypothetical_google_api_charges
-    hypothetical_google_api_charges = 0
+    global number_of_limbs_owed_to_google
+    number_of_limbs_owed_to_google = 0
     utils.cache.clear_cache("machine_learning_powered_echo")
     @utils.cache.with_cache
     def machine_learning_powered_echo(x: Any) -> Any:
-        global hypothetical_google_api_charges
-        hypothetical_google_api_charges += 1
+        global number_of_limbs_owed_to_google
+        number_of_limbs_owed_to_google += 1
         return x
     machine_learning_powered_echo("foo")
     machine_learning_powered_echo("foo")
-    assert hypothetical_google_api_charges == 1
+    assert number_of_limbs_owed_to_google == 1
     utils.cache.clear_cache("machine_learning_powered_echo")
     machine_learning_powered_echo("foo")
-    assert hypothetical_google_api_charges == 2
+    assert number_of_limbs_owed_to_google == 2
     assert machine_learning_powered_echo([]) == []
     assert machine_learning_powered_echo(["foo"]) == ["foo"]
     utils.cache.clear_cache("machine_learning_powered_echo")
+
+def trace_extract_info(line: str = "",
+                       level: str = "verbose") -> Dict[str, List[str]]:
+    if not line:
+        line = CASES[0]["line"][0]
+    try:
+        os.remove(utils.cache.log_name)
+    except FileNotFoundError:
+        pass
+    utils.cache.log_level = level
+    result = extract_info.extract_info(line, no_cache=True)
+    utils.cache.log_level = "none"
+    return result
+
+# R_good = "R1(R2(R3)?)?)?)"
+# R_fail = "R1R2R3"
+# C_good = f"C1({R_good})?C2"
+
+# todo: test executation order
+# there's a few versions that are acceptable
+# g1, c1, r1, r2, c2, r1, r2, g2, c1, r1, r2, etc would make sense
+# but if g1 is wrong we need to immediately skip to g2
+# if c1 is wrong we need to immediately skip to c2 without trying to refine
+
+# start -> g1 -> g2 -> g3 -> fail
+# g{n} -> c1 -> c2 -> g{n+1}
+# c{n} -> r1 -> r2 -> r3 -> c{n+1}
+# r{n} -> success 
+
+# simpler complete version
+# g1 -> (c1, g2)
+# g2 -> (c1, fail)
+# c1 -> (r1, c2)
+# c2 -> (r1, g2)
+# r1 -> (success, r2)
+# r2 -> (success, c2)
+
+# if this is an FSM there should be a regex for it
+# using a shorthand where [gcr][12] is one char
+
 
 def test_contains_nonlatin() -> None:
     assert not extract_names.contains_nonlatin("Stephanie")
@@ -91,9 +130,10 @@ CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
 def correct_case(request: Any) -> Entry:
     return request.param
 
+
 def test_cases(correct_case: Entry) -> None:
     line = correct_case["line"][0]
-    actual = extract_info.extract_info(line, no_cache=True)
+    actual = trace_extract_info(line)
     if actual != correct_case:
         pdb.set_trace()
         actual = extract_info.extract_info(line, no_cache=True)

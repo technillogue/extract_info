@@ -28,7 +28,7 @@ def extract_emails(text: str) -> List[str]:
     return EMAIL_RE.findall(text)
 
 @cache.with_cache
-def extract_info(raw_line: str, flags: bool=False) -> Dict[str, List[str]]:
+def extract_info(raw_line: str, flags: bool = False) -> Dict[str, List[str]]:
     line: str = raw_line.replace("'", "").replace("\n", "")
     emails: List[str] = extract_emails(line)
     phones: List[str] = extract_phones(line)

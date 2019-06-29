@@ -62,15 +62,16 @@ def google_extract_names(text: str) -> Names:
     """
     text = "".join(c for c in text if not contains_nonlatin(c))
     return google_analyze.extract_entities(text)
+    # TODO: merge adjacent names 
 
-# check if simplifying this logic reduces accuracy
 @cache.with_cache
 def only_alpha(text: str) -> str:
     "remove words that don't have any alphabetical chareceters or -"
     return " ".join([
         word for word in text.split()
-        if all(c.isalpha() or c in r"-\!$%(,.:;?" for c in word)
+        if all(c.isalpha() or c in r"-/\$%(),.:;?!" for c in word)
     ])
+
 @cache.with_cache
 def every_name(line: str) -> str:
     open("every_name_ex", "a").write(line + "\n")
@@ -78,7 +79,7 @@ def every_name(line: str) -> str:
         "My name is {}. ".format,
         only_alpha(line).split()
     ))
-
+    # explore some option for merging adjacent names?
 
 GOOGLE_EXTRACTORS = list(map(
     partial(compose, google_extract_names),
@@ -87,21 +88,20 @@ GOOGLE_EXTRACTORS = list(map(
 
 ## refiners
 
-def fuzzy_union(set_pair: Tuple[Names, Names]) -> Names:
-    google_names, crude_names = set_pair
+def fuzzy_intersect(google_names: Names, crude_names: Names) -> Names:
     if google_names == []:
         return crude_names
-    union = []
+    intersect = []
     for crude_name in crude_names:
         if contains_nonlatin(crude_name):
-            union.append(crude_name)
+            intersect.append(crude_name)
             # google doesn't work with non-latin characters
             # so we ignore it in those cases
         else:
             for google_name in google_names:
                 if [part for part in crude_name.split() if part in google_name]:
-                    union.append(crude_name)
-    return union
+                    intersect.append(crude_name)
+    return intersect
 
 @cache.with_cache
 def remove_synonyms(names: Names) -> Names:
@@ -142,15 +142,14 @@ def extract_names(line: str, min_names: int, max_names: int) -> Names:
         min_criteria,
         (extractor(text) for extractor in CRUDE_EXTRACTORS)
     )
-    consensuses: Iterator[Names] = filter(
+    consensuses: Iterator[Names] = soft_filter(
         min_criteria,
-        map(fuzzy_union, product(google_extractions, crude_extractions))
+        (fuzzy_intersect(google_extraction, crude_extraction)
+         for google_extraction in google_extractions
+         for crude_extraction in crude_extractions)
     )
     refined_consensuses: Iterator[Names] = soft_filter(
         lambda consensus: min_names <= len(consensus) <= max_names,
-        (
-            refine(consensus)
-            for consensus, refine in product(consensuses, REFINERS)
-        )
+        (refine(consensus) for consensus in consensuses for refine in REFINERS)
     )
     return next(refined_consensuses)

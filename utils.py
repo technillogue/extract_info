@@ -1,7 +1,7 @@
 import json
 import functools
 from typing import (
-    List, Dict, Callable, Any, Union, Iterator, TypeVar, Optional
+    List, Dict, Callable, Any, Union, Iterator, TypeVar
 )
 from collections import defaultdict
 
@@ -20,7 +20,7 @@ def compose(f: Callable[[TextOrNames], Names],
 X = TypeVar("X")
 
 def soft_filter(predicate: Callable[[X], bool], seq: Iterator[X],
-                default_if_empty: Optional[X] = None) -> Iterator[X]:
+                default_if_empty: Union[X, None, List] = None) -> Iterator[X]:
     """filter, but always returning at least one item.
     if iter is empty, return default_if_empty
     otherwise, if none of the items in iter satisfy predicate, return the last
@@ -50,20 +50,23 @@ class Cache:
     use finally: to make sure the cache gets saved
     """
 
-    def __init__(self, cachename: str = "data/cache.json"):
-        self.cachename = cachename
+    def __init__(self, cache_name: str = "data/cache.json",
+                 log_name: str = "data/cache.log"):
+        self.cache_name = cache_name
+        self.log_name = log_name
         self.func_names: Names = []
         self.cache: Dict[str, Dict[str, str]]
+        self.log_level: str = "none" # for REPL debugging
 
     def open_cache(self) -> None:
         try:
-            data = json.load(open(self.cachename, encoding="utf-8"))
+            data = json.load(open(self.cache_name, encoding="utf-8"))
         except IOError:
             data = {}
         self.cache = defaultdict(dict, data)
 
     def save_cache(self) -> None:
-        with open(self.cachename, "w", encoding="utf-8") as f:
+        with open(self.cache_name, "w", encoding="utf-8") as f:
             json.dump(dict(self.cache), f)
         print("saved cache")
 
@@ -88,6 +91,16 @@ class Cache:
         }
         self.save_cache()
 
+    def log(self, status: str, func_name: str, value: Any, arg: str) -> None:
+        if self.log_level != "none":
+            if self.log_level == "verbose":
+                log_entry = (f"{status:<4}: {func_name:<20}\nresult '{value}'"
+                             f"\nfor input '{arg}'\n\n\n")
+            else:
+                log_entry = f"{func_name}\n"
+            with open("data/cache.log", "a", encoding="utf-8") as log_file:
+                log_file.write(log_entry)
+
     def with_cache(self, decorated: Callable) -> Callable:
         func_name = decorated.__name__
         self.func_names.append(func_name)
@@ -99,17 +112,19 @@ class Cache:
             else:
                 key = arg1
             try:
-                if not no_cache and self.cache[key][func_name] is not None:
+                if (not no_cache and self.cache[key][func_name] is not None
+                        and not (func_name == "google_extract_names" and
+                                 self.cache[key][func_name] == [])):
                     # sometimes we've saved google saying nothing
                     # in some cases this is because of e.g. network error
                     # so we don't trust that
-                    if not (func_name == "google_extract_names"
-                            and self.cache[key][func_name] == []):
-                        return self.cache[key][func_name]
+                    self.log("hit", func_name, self.cache[key][func_name], key)
+                    return self.cache[key][func_name]
             except KeyError:
                 pass
             value = decorated(arg1, *args, **kwargs)
             self.cache[key][func_name] = value
+            self.log("miss", func_name, value, key)
             return value
         return wrapper
 
