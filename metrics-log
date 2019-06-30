@@ -99,3 +99,7 @@
 # correct: 91.56%, not enough 4.73%, too many: 3.70%
 # took 384 seconds to run (an improvement over half an hour!)
 # (subsequent runs with caching are ~10s!)
+
+# tweaked cache, added loggers, pass extractors, reorganize tests
+# add regex call stack testing
+# correct: 91.56%, not enough: 4.73%, too many: 3.70%

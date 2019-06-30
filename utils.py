@@ -14,12 +14,18 @@ TextOrNames = Union[str, Names]
 def identity_function(x: Any) -> Any:
     return x
 
-def compose(f: Callable[[TextOrNames], Names],
-            g: Callable[[TextOrNames], TextOrNames]) -> Callable:
+def compose(f: Callable[[TextOrNames, Optional[bool]], Names],
+            g: Callable[[TextOrNames, Optional[bool]], TextOrNames]) -> Callable:
+    f_kw, g_kw = (
+        {"no_cache": True} if func.__name__.endswith("_cached") else {}
+        for func in (f, g)
+    )
     def composed_function(arg: TextOrNames) -> Names:
-        return f(g(arg))
+        return f(g(arg, **g_kw), **f_kw)
     composed_function.__name__ = "_".join((f.__name__, g.__name__))
-    return cache.with_cache(composed_function)
+    if "_cached" in composed_function.__name__:
+        return cache.with_cache(composed_function)
+    return composed_function
 
 X = TypeVar("X")
 
@@ -98,21 +104,24 @@ class Cache:
         @functools.wraps(func)
         def wrapper(arg1: Union[str, List[str]], *args: Any,
                     no_cache: bool = False, **kwargs: Any) -> Any:
+            if no_cache:
+                return func(arg1, *args, **kwargs)
             if isinstance(arg1, list):
                 key = json.dumps(arg1)
             else:
                 key = arg1
             try:
-                if (not no_cache and self.cache[key][func_name] is not None):
-                    # sometimes we've saved google saying nothing
-                    # in some cases this is because of e.g. network error
-                    # so we don't trust that
-                    return self.cache[key][func_name]
+                return self.cache[key][func_name]
             except KeyError:
                 pass
             value = func(arg1, *args, **kwargs)
+            # nice-to-have: allow a default value to be returned in case
+            # of errors, and don't store that (instead of current impl
+            # where the function has to catch its error and that defaut is
+            # cached)
             self.cache[key][func_name] = value
             return value
+        wrapper.__name__ += "_cached"
         return wrapper
 
 
