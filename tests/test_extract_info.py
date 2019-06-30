@@ -7,54 +7,6 @@ import pytest
 import extract_info
 import extract_names
 import utils
-
-def show_all_extractions(text: str) -> Dict[str, List[List[str]]]:
-    return {
-        "google_extractions":
-            [extractor(text) for extractor in extract_names.GOOGLE_EXTRACTORS],
-        "crude_extractions":
-            [extractor(text) for extractor in extract_names.CRUDE_EXTRACTORS]
-    }
- 
-    # consensuses: Iterator[Names] = filter(
-    #     min_criteria,
-    #     map(fuzzy_intersect, product(google_extractions, crude_extractions))
-    # )
-    # refined_consensuses: Iterator[Names] = soft_filter(
-    #     lambda consensus: min_names <= len(consensus) <= max_names,
-    #     (
-    #         refine(consensus)
-    #         for consensus, refine in product(consensuses, REFINERS)
-    #     )
-    # )
-
-
-def test_soft_filter() -> None:
-    assert list(utils.soft_filter(lambda i: True, iter([]))) == [[]]
-    assert list(utils.soft_filter(lambda i: i < 0, iter(range(10)))) == [9]
-    assert list(utils.soft_filter(lambda i: i % 2 == 0, iter(range(10)))) == [
-        0, 2, 4, 6, 8
-    ]
-
-def test_cache() -> None:
-    global number_of_limbs_owed_to_google
-    number_of_limbs_owed_to_google = 0
-    utils.cache.clear_cache("machine_learning_powered_echo")
-    @utils.cache.with_cache
-    def machine_learning_powered_echo(x: Any) -> Any:
-        global number_of_limbs_owed_to_google
-        number_of_limbs_owed_to_google += 1
-        return x
-    machine_learning_powered_echo("foo")
-    machine_learning_powered_echo("foo")
-    assert number_of_limbs_owed_to_google == 1
-    utils.cache.clear_cache("machine_learning_powered_echo")
-    machine_learning_powered_echo("foo")
-    assert number_of_limbs_owed_to_google == 2
-    assert machine_learning_powered_echo([]) == []
-    assert machine_learning_powered_echo(["foo"]) == ["foo"]
-    utils.cache.clear_cache("machine_learning_powered_echo")
-
 # R_good = "R1(R2(R3)?)?)?)"
 # R_fail = "R1R2R3"
 # C_good = f"C1({R_good})?C2"
@@ -80,30 +32,6 @@ def test_cache() -> None:
 
 # if this is an FSM there should be a regex for it
 # using a shorthand where [gcr][12] is one char
-
-
-def test_contains_nonlatin() -> None:
-    assert not extract_names.contains_nonlatin("Stephanie")
-    assert extract_names.contains_nonlatin(u"Лена")
-
-def test_every_name() -> None:
-    assert extract_names.every_name(
-        "3/14 Planet Fitness McCall 603-750-0001 X 119 Paid cr card"
-    ) == ("My name is Planet. My name is Fitness. My name is McCall. "
-          "My name is X. My name is Paid. My name is cr. My name is card. ")
-
-def test_no_google() -> None:
-    actual = extract_names.extract_names(
-        "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
-        1, 1)
-    expected = ["Lisa"]
-    if actual != expected:
-        pdb.set_trace()
-        extract_names.extract_names(
-            "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
-            1, 1
-        )
-    assert actual == expected
 
 
 Entry = Dict[str, List[str]]
