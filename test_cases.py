@@ -15,7 +15,7 @@ def show_all_extractions(text: str) -> Dict[str, List[List[str]]]:
         "crude_extractions":
             [extractor(text) for extractor in extract_names.CRUDE_EXTRACTORS]
     }
-  
+ 
     # consensuses: Iterator[Names] = filter(
     #     min_criteria,
     #     map(fuzzy_intersect, product(google_extractions, crude_extractions))
@@ -68,7 +68,7 @@ def test_cache() -> None:
 # start -> g1 -> g2 -> g3 -> fail
 # g{n} -> c1 -> c2 -> g{n+1}
 # c{n} -> r1 -> r2 -> r3 -> c{n+1}
-# r{n} -> success 
+# r{n} -> success
 
 # simpler complete version
 # g1 -> (c1, g2)

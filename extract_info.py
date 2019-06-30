@@ -29,7 +29,8 @@ def extract_emails(text: str) -> List[str]:
     "returns emails in text"
     return EMAIL_RE.findall(text)
 
-def extract_info(raw_line: str, flags: bool = False) -> Dict[str, List[str]]:
+def extract_info(raw_line: str, flags: bool = False,
+                 **extract_names_kwargs) -> Dict[str, List[str]]:
     line: str = raw_line.replace("'", "").replace("\n", "")
     emails: List[str] = extract_emails(line)
     phones: List[str] = extract_phones(line)
@@ -42,7 +43,10 @@ def extract_info(raw_line: str, flags: bool = False) -> Dict[str, List[str]]:
     if max_contacts == 0:
         names = ["skipped"]
     else:
-        names = extract_names(space_dashes(line), min_contacts, max_contacts)
+        names = extract_names(
+            space_dashes(line), min_contacts, max_contacts,
+            **extract_names_kwargs
+        )
     print(".", end="")
     sys.stdout.flush()
     result = {

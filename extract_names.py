@@ -43,7 +43,9 @@ def all_capitalized_extract_names(text: str) -> List[str]:
         for word in text.split() if word[0].isupper()
     ]
 
-CRUDE_EXTRACTORS: List[Callable[[str], Names]] = [
+Extractors = List[Callable[[str], Names]]
+
+CRUDE_EXTRACTORS: Extractors = [
     nltk_extract_names, all_capitalized_extract_names
 ]
 
@@ -75,7 +77,7 @@ def every_name(line: str) -> str:
     ))
     # explore some option for merging adjacent names?
 
-GOOGLE_EXTRACTORS = list(map(
+GOOGLE_EXTRACTORS: Extractors = list(map(
     partial(compose, google_extract_names),
     [only_alpha, identity_function, every_name]
 ))
@@ -116,10 +118,11 @@ def remove_nonlatin(names: Names) -> Names:
 def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
 
-UNIQUE_REFINERS = [remove_short, remove_synonyms, remove_nonlatin]
+Refiners = List[Callable[[Names], Names]]
 
-REFINERS: Sequence[Callable[[Names], Names]]
-REFINERS = [identity_function] + list(map(
+UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
+
+REFINERS: Refiners = [identity_function] + list(map(
     partial(reduce, compose),
     chain(*(map(
         partial(combinations, UNIQUE_REFINERS),
@@ -127,17 +130,21 @@ REFINERS = [identity_function] + list(map(
     )))
 ))
 
-def extract_names(text: str, min_names: int, max_names: int) -> Names:
+
+def extract_names(text: str, min_names: int, max_names: int,
+                  google_extractors: Extractors = GOOGLE_EXTRACTORS,
+                  crude_extractors: Extractors = CRUDE_EXTRACTORS,
+                  refiners: Refiners = REFINERS) -> Names:
     def min_criteria(names: Names) -> bool:
         return len(names) >= min_names
     # does it contain nonlatin?
     google_extractions: Iterator[Names] = soft_filter(
         min_criteria,
-        (extractor(text) for extractor in GOOGLE_EXTRACTORS)
+        (extractor(text) for extractor in google_extractors)
     ) # if so, google needs to return min_names - nonlatin names
     crude_extractions: Iterator[Names] = soft_filter(
         min_criteria,
-        (extractor(text) for extractor in CRUDE_EXTRACTORS)
+        (extractor(text) for extractor in crude_extractors)
     ) # set aside any nonlatin results
     consensuses: Iterator[Names] = soft_filter(
         min_criteria,
@@ -156,6 +163,6 @@ def extract_names(text: str, min_names: int, max_names: int) -> Names:
     #   r1, r2, remove_nonlatin, remove_nonlatin(r1(, ...
     refined_consensuses: Iterator[Names] = soft_filter(
         lambda consensus: min_names <= len(consensus) <= max_names,
-        (refine(consensus) for consensus in consensuses for refine in REFINERS)
+        (refine(consensus) for consensus in consensuses for refine in refiners)
     )
     return next(refined_consensuses)
