@@ -103,3 +103,6 @@
 # tweaked cache, added loggers, pass extractors, reorganize tests
 # add regex call stack testing
 # correct: 91.56%, not enough: 4.73%, too many: 3.70%
+# 1055 seconds to regenerate the entire cache
+# 4.142 seconds with a complete cache
+# could speed up significantly 1
