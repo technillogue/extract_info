@@ -1,45 +1,44 @@
-
 # preprocess, keep
 # true positive: 0.6172839506172839, false negative: 0.19547325102880658, false positive: 0.18724279835390947
 
 # don't preprocess, keep
-#true positive: 0.565843621399177, false negative: 0.24279835390946503, false positive: 0.19135802469135801
+# true positive: 0.565843621399177, false negative: 0.24279835390946503, false positive: 0.19135802469135801
 
-#preprocess, keep [unknown change]
-#true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
+# preprocess, keep [unknown change]
+# true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
 
 
-#preprocess, keep [unknown change]
-#true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
+# preprocess, keep [unknown change]
+# true positive: 0.588477366255144, false negative: 0.2345679012345679, false positive: 0.17695473251028807
 
 
 # cleaned up, fixed preprocessing bug, one preprocessing method
-#$ python -i extract_info.py --clear
-#true positive: 0.533, false negative: 0.416, false positive: 0.0514
+# $ python -i extract_info.py --clear
+# true positive: 0.533, false negative: 0.416, false positive: 0.0514
 
 # only compare google if it gives an answer
-#$ python -i extract_info.py --clear
-#true positive: 0.533, false negative: 0.329, false positive: 0.138
+# $ python -i extract_info.py --clear
+# true positive: 0.533, false negative: 0.329, false positive: 0.138
 
 # not sure what the change here is
 # $ python -i extract_info.py --clear
-#true positive: 0.591, false negative: 0.276, false positive: 0.134
+# true positive: 0.591, false negative: 0.276, false positive: 0.134
 
 # check max(clean, not clean) and every capitalized word
-#true positive: 0.733, false negative: 0.105, false positive: 0.163
+# true positive: 0.733, false negative: 0.105, false positive: 0.163
 
 # don't check clean
-#true positive: 0.726, false negative: 0.113, false positive: 0.16
+# true positive: 0.726, false negative: 0.113, false positive: 0.16
 # however, somewhat better performance for getting the correct name imo
 
 # don't check clean but put spaces around -
-#true positive: 0.728, false negative: 0.105, false positive: 0.167
+# true positive: 0.728, false negative: 0.105, false positive: 0.167
 
 # also remember to keep the dashses lol
 # true positive: 0.77, false negative: 0.109, false positive: 0.121
 
 # what if dashes but parsed correctly without fucking phone numbers
-#true positive: 0.782, false negative: 0.0885, false positive: 0.13
+# true positive: 0.782, false negative: 0.0885, false positive: 0.13
 
 # remove duplicate phone numbers
 # true positive: 78.19%, false negative: 8.85%, false positive: 12.96%
@@ -85,7 +84,7 @@
 # correct: 87.85%, not enough 4.53%, too many: 7.61%
 
 # after starting to use combinatorial extraction
-# correct: 87.86%, not enough: 3.91%, too many: 8.23% 
+# correct: 87.86%, not enough: 3.91%, too many: 8.23%
 
 # fixing some bugs and imporoving performance, also max_names = sum(contact_counts)
 # instead of max(contact_counts) -- not sure if merged
