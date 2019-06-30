@@ -15,7 +15,8 @@ def compose(f: Callable[[TextOrNames], Names],
             g: Callable[[TextOrNames], TextOrNames]) -> Callable:
     def composed_function(arg: TextOrNames) -> Names:
         return f(g(arg))
-    return composed_function
+    composed_function.__name__ = "_".join((f.__name__, g.__name__))
+    return cache.with_cache(composed_function)
 
 X = TypeVar("X")
 
@@ -77,11 +78,11 @@ class Cache:
 
     def clever_clear_cache(self) -> None:
         import csv
-        lines = set(
+        lines = {
             line[0] for line in csv.reader(open("data/info_edited.csv"))
-        )
+        }
         keep = lines.intersection(self.cache)
-        keep_funcs = set(("google_extract_names",))
+        keep_funcs = {"google_extract_names", "nltk_extract_names"}
         self.cache = {
             key: {
                 func: self.cache[key][func]

@@ -1,22 +1,15 @@
-import re
 import string
 from itertools import (
-    permutations, combinations, product, filterfalse, chain#, starmap
+    permutations, combinations, filterfalse, chain#, starmap
 )
 from functools import reduce, partial
-from typing import List, Callable, Iterator, Tuple, Sequence
-import nltk
-from nltk.corpus import wordnet
+from typing import List, Callable, Iterator, Sequence
 import google_analyze
 from utils import cache, compose, identity_function, soft_filter
 
 Names = List[str]
 
 # general functions
-
-def space_dashes(text: str) -> str:
-    "put spaces around dashes without spaces"
-    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
 def contains_nonlatin(text: str) -> bool:
     return not any(map(string.printable.__contains__, text))
@@ -31,6 +24,7 @@ def contains_nonlatin(text: str) -> bool:
 @cache.with_cache
 def nltk_extract_names(text: str) -> Names:
     "returns names using NLTK Named Entity Recognition, filters out repetition"
+    import nltk
     names = []
     for sentance in nltk.sent_tokenize(text):
         for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance))):
@@ -75,7 +69,6 @@ def only_alpha(text: str) -> str:
 
 @cache.with_cache
 def every_name(line: str) -> str:
-    open("every_name_ex", "a").write(line + "\n")
     return "".join(map(
         "My name is {}. ".format,
         only_alpha(line).split()
@@ -107,6 +100,7 @@ def fuzzy_intersect(google_names: Names, crude_names: Names) -> Names:
 @cache.with_cache
 def remove_synonyms(names: Names) -> Names:
     "removes words that have wordnet synonyms"
+    from nltk.corpus import wordnet
     return [
         name
         for name in names
@@ -133,8 +127,7 @@ REFINERS = [identity_function] + list(map(
     )))
 ))
 
-def extract_names(line: str, min_names: int, max_names: int) -> Names:
-    text: str = space_dashes(line)
+def extract_names(text: str, min_names: int, max_names: int) -> Names:
     def min_criteria(names: Names) -> bool:
         return len(names) >= min_names
     # does it contain nonlatin?

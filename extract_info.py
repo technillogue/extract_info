@@ -4,14 +4,17 @@ import re
 import itertools
 import argparse
 from typing import List, Dict, Tuple
-from utils import cache
 from extract_names import extract_names
+from utils import cache
 # requires python3.6+
 
 PHONE_RE = re.compile(r'(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})')
 EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+')
 
-@cache.with_cache
+def space_dashes(text: str) -> str:
+    "put spaces around dashes without spaces"
+    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
+
 def extract_phones(text: str) -> List[str]:
     "returns phone numbers in text"
     phone_numbers = [
@@ -22,12 +25,10 @@ def extract_phones(text: str) -> List[str]:
     # python3.6+
     return list(dict.fromkeys(phone_numbers))
 
-@cache.with_cache
 def extract_emails(text: str) -> List[str]:
     "returns emails in text"
     return EMAIL_RE.findall(text)
 
-@cache.with_cache
 def extract_info(raw_line: str, flags: bool = False) -> Dict[str, List[str]]:
     line: str = raw_line.replace("'", "").replace("\n", "")
     emails: List[str] = extract_emails(line)
@@ -41,7 +42,7 @@ def extract_info(raw_line: str, flags: bool = False) -> Dict[str, List[str]]:
     if max_contacts == 0:
         names = ["skipped"]
     else:
-        names = extract_names(line, min_contacts, max_contacts)
+        names = extract_names(space_dashes(line), min_contacts, max_contacts)
     print(".", end="")
     sys.stdout.flush()
     result = {
