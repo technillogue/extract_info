@@ -121,11 +121,8 @@ class Logger:
                  log_name: str = "trace"):
         self.log = logging.getLogger(log_name)
         self.log.setLevel("INFO")
-        if stream is None:
-            stream = io.StringIO()
-        self.stream = stream
-        self.handler = logging.StreamHandler(self.stream)
-        self.log.addHandler(self.handler)
+        self.handler: Optional[logging.Handler] = None
+        self.new_stream(stream)
 
     def logged(self, fn: Callable) -> Callable:
         @functools.wraps(fn)
@@ -134,6 +131,15 @@ class Logger:
             return fn(*args, **kwargs)
         return wrapper
 
+    def new_stream(self, stream: Optional[IO]= None) -> IO:
+        if self.handler:
+            self.log.removeHandler(self.handler)
+        if stream is None:
+            stream = io.StringIO()
+        self.stream = stream
+        self.handler = logging.StreamHandler(self.stream)
+        self.log.addHandler(self.handler)
+        return stream
 
 cache = Cache()
 cache.open_cache()

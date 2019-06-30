@@ -1,17 +1,24 @@
+import re
 import random
 import os
 import pdb
 import json
-from functools import partial
 from typing import Dict, List, Iterable, Any, Tuple, Callable
 import pytest
 import extract_info
 import extract_names
 import utils
-# R_good = "R1(R2(R3)?)?)?)"
-# R_fail = "R1R2R3"
-# C_good = f"C1({R_good})?C2"
 
+def correct_pattern_gen(items: List[str], suffix: str) -> str:
+    if len(items) == 1:
+        return items[0]+ "\n" + suffix
+    return f"{items[0]}\n{suffix}({correct_pattern_gen(items[1:], suffix)})?".replace("\n\n", "\n")
+    # awful hack please debug
+
+# R_good = "R1( R2( R3)?)??"
+# R_fail = "R1R2R3"
+# C_good = f"C1 {R_good} (C2 {R_good})"
+# G_good = f"G1({C_good})?G2
 # todo: test executation order
 # there's a few versions that are acceptable
 # g1, c1, r1, r2, c2, r1, r2, g2, c1, r1, r2, etc would make sense
@@ -47,21 +54,38 @@ def correct_case(request: Any) -> Entry:
 
 def _trace_extract_info() -> Tuple[utils.Logger, Callable]:
     logger = utils.Logger()
-    wrap_logging = partial(map, logger.logged)
+    def wrap_logging(funcs: List[Callable]) -> List[Callable]:
+        return [logger.logged(func) for func in funcs]
     methods = {
-        "google_extractors": wrap_logging(extract_names.GOOGLE_EXTRACTORS),
+        "refiners": wrap_logging(extract_names.REFINERS),
         "crude_extractors": wrap_logging(extract_names.CRUDE_EXTRACTORS),
-        "refiners": wrap_logging(extract_names.REFINERS)
+        "google_extractors": wrap_logging(extract_names.GOOGLE_EXTRACTORS)
     }
+    methods_names: List[str] = [
+        [f.__name__ for f in category]
+        for category in methods.values()
+    ]
+    correct_pattern = ""
+    for method_names in methods_names:
+        correct_pattern = correct_pattern_gen(method_names, correct_pattern)
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
-        return extract_info.extract_info(*args, **methods, **kwargs)
+        result = extract_info.extract_info(*args, **methods, **kwargs)
+        # assert re.fullmatch(
+        #     correct_pattern, logger.stream.getvalue()
+        # ) is not None
+        return result
     return (logger, traced_extract_info)
 
 trace_extract_info = pytest.fixture(_trace_extract_info)
 
-def test_cases(correct_case: Entry) -> None:
+
+
+def test_cases(correct_case: Entry,
+               trace_extract_info: Tuple[utils.Logger, Callable]) -> None:
+    logger, traced_extract_info = trace_extract_info
+    stream = logger.new_stream()
     line = correct_case["line"][0]
-    actual = extract_info.extract_info(line)
+    actual = traced_extract_info(line)
     if actual != correct_case:
         pdb.set_trace()
         actual = extract_info.extract_info(line)
