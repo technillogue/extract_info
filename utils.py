@@ -1,9 +1,12 @@
 import json
+import logging
+import io
 import functools
 from typing import (
-    List, Dict, Callable, Any, Union, Iterator, TypeVar
+    List, Dict, Callable, Any, Union, Iterator, TypeVar, Optional, IO
 )
 from collections import defaultdict
+
 
 Names = List[str]
 TextOrNames = Union[str, Names]
@@ -50,14 +53,11 @@ class Cache:
     to disk, i.e. {text: {func1: result1, func2: result2}, text2: {...}, ...}
     use finally: to make sure the cache gets saved
     """
-
-    def __init__(self, cache_name: str = "data/cache.json",
-                 log_name: str = "data/cache.log"):
+    # maybe add cache hit/miss statistics in the future
+    def __init__(self, cache_name: str = "data/cache.json"):
         self.cache_name = cache_name
-        self.log_name = log_name
         self.func_names: Names = []
         self.cache: Dict[str, Dict[str, str]]
-        self.log_level: str = "none" # for REPL debugging
 
     def open_cache(self) -> None:
         try:
@@ -92,20 +92,10 @@ class Cache:
         }
         self.save_cache()
 
-    def log(self, status: str, func_name: str, value: Any, arg: str) -> None:
-        if self.log_level != "none":
-            if self.log_level == "verbose":
-                log_entry = (f"{status:<4}: {func_name:<20}\nresult '{value}'"
-                             f"\nfor input '{arg}'\n\n\n")
-            else:
-                log_entry = f"{func_name}\n"
-            with open("data/cache.log", "a", encoding="utf-8") as log_file:
-                log_file.write(log_entry)
-
-    def with_cache(self, decorated: Callable) -> Callable:
-        func_name = decorated.__name__
+    def with_cache(self, func: Callable) -> Callable:
+        func_name = func.__name__
         self.func_names.append(func_name)
-        @functools.wraps(decorated)
+        @functools.wraps(func)
         def wrapper(arg1: Union[str, List[str]], *args: Any,
                     no_cache: bool = False, **kwargs: Any) -> Any:
             if isinstance(arg1, list):
@@ -117,14 +107,31 @@ class Cache:
                     # sometimes we've saved google saying nothing
                     # in some cases this is because of e.g. network error
                     # so we don't trust that
-                    self.log("hit", func_name, self.cache[key][func_name], key)
                     return self.cache[key][func_name]
             except KeyError:
                 pass
-            value = decorated(arg1, *args, **kwargs)
+            value = func(arg1, *args, **kwargs)
             self.cache[key][func_name] = value
-            self.log("miss", func_name, value, key)
             return value
+        return wrapper
+
+
+class Logger:
+    def __init__(self, stream: Optional[IO] = None,
+                 log_name: str = "trace"):
+        self.log = logging.getLogger(log_name)
+        self.log.setLevel("INFO")
+        if stream is None:
+            stream = io.StringIO()
+        self.stream = stream
+        self.handler = logging.StreamHandler(self.stream)
+        self.log.addHandler(self.handler)
+
+    def logged(self, fn: Callable) -> Callable:
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            self.log.info(fn.__name__)
+            return fn(*args, **kwargs)
         return wrapper
 
 

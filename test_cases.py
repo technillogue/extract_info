@@ -55,19 +55,6 @@ def test_cache() -> None:
     assert machine_learning_powered_echo(["foo"]) == ["foo"]
     utils.cache.clear_cache("machine_learning_powered_echo")
 
-def trace_extract_info(line: str = "",
-                       level: str = "verbose") -> Dict[str, List[str]]:
-    if not line:
-        line = CASES[0]["line"][0]
-    try:
-        os.remove(utils.cache.log_name)
-    except FileNotFoundError:
-        pass
-    utils.cache.log_level = level
-    result = extract_info.extract_info(line)
-    utils.cache.log_level = "none"
-    return result
-
 # R_good = "R1(R2(R3)?)?)?)"
 # R_fail = "R1R2R3"
 # C_good = f"C1({R_good})?C2"
@@ -133,7 +120,7 @@ def correct_case(request: Any) -> Entry:
 
 def test_cases(correct_case: Entry) -> None:
     line = correct_case["line"][0]
-    actual = trace_extract_info(line)
+    actual = extract_info.extract_info(line)
     if actual != correct_case:
         pdb.set_trace()
         actual = extract_info.extract_info(line)
