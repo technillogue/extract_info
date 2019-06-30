@@ -22,5 +22,7 @@ def test_no_google() -> None:
             "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
             1, 1
         )
+    else:
+        extract_names.cache.save_cache()
     assert actual == expected
 

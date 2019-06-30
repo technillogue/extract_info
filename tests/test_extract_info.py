@@ -2,7 +2,8 @@ import random
 import os
 import pdb
 import json
-from typing import Dict, List, Iterable, Any, Tuple
+from functools import partial
+from typing import Dict, List, Iterable, Any, Tuple, Callable
 import pytest
 import extract_info
 import extract_names
@@ -40,11 +41,23 @@ CASES: List[Entry]
 CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
 
 
-
 @pytest.fixture(params=CASES)
 def correct_case(request: Any) -> Entry:
     return request.param
 
+def _trace_extract_info() -> Tuple[utils.Logger, Callable]:
+    logger = utils.Logger()
+    wrap_logging = partial(map, logger.logged)
+    methods = {
+        "google_extractors": wrap_logging(extract_names.GOOGLE_EXTRACTORS),
+        "crude_extractors": wrap_logging(extract_names.CRUDE_EXTRACTORS),
+        "refiners": wrap_logging(extract_names.REFINERS)
+    }
+    def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
+        return extract_info.extract_info(*args, **methods, **kwargs)
+    return (logger, traced_extract_info)
+
+trace_extract_info = pytest.fixture(_trace_extract_info)
 
 def test_cases(correct_case: Entry) -> None:
     line = correct_case["line"][0]
