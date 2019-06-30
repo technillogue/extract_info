@@ -64,7 +64,7 @@ def trace_extract_info(line: str = "",
     except FileNotFoundError:
         pass
     utils.cache.log_level = level
-    result = extract_info.extract_info(line, no_cache=True)
+    result = extract_info.extract_info(line)
     utils.cache.log_level = "none"
     return result
 
@@ -136,7 +136,7 @@ def test_cases(correct_case: Entry) -> None:
     actual = trace_extract_info(line)
     if actual != correct_case:
         pdb.set_trace()
-        actual = extract_info.extract_info(line, no_cache=True)
+        actual = extract_info.extract_info(line)
     assert actual == correct_case
 
 
@@ -175,7 +175,7 @@ def test_difficult_cases(difficult_case: Entry) -> None:
     """these are examples that were marked as incorrect, if we have
     different anaswers for them that means there might be improvement"""
     line = difficult_case["line"][0]
-    actual_case: Entry = extract_info.extract_info(line, no_cache=True)
+    actual_case: Entry = extract_info.extract_info(line)
     if actual_case["names"] != difficult_case["names"]:
         correct = ask(actual_case)
         if correct:
