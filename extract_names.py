@@ -1,7 +1,7 @@
 import string
 from itertools import permutations, combinations, filterfalse, chain  # , starmap
 from functools import reduce, partial
-from typing import List, Callable, Iterator
+from typing import List, Tuple, Callable, Iterator
 import google_analyze
 from utils import cache, compose, identity_function, soft_filter
 
@@ -46,9 +46,11 @@ def all_capitalized_extract_names(text: str) -> List[str]:
     ]
 
 
-Extractors = List[Callable[[str], Names]]
+Extractors = Tuple[Callable[[str], Names], ...]
+# stylistic tradeoff, a list would be more appropriate for this homogenous data
+# but having an immutable type means I can safely pass it as a default without disabling pylint
 
-CRUDE_EXTRACTORS: Extractors = [nltk_extract_names, all_capitalized_extract_names]
+CRUDE_EXTRACTORS: Extractors = (nltk_extract_names, all_capitalized_extract_names)
 
 ### google extractor and preprocessors
 
@@ -82,7 +84,7 @@ def every_name(line: str) -> str:
     # explore some option for merging adjacent names?
 
 
-GOOGLE_EXTRACTORS: Extractors = list(
+GOOGLE_EXTRACTORS: Extractors = tuple(
     map(
         partial(compose, google_extract_names),
         [only_alpha, identity_function, every_name],
@@ -131,11 +133,11 @@ def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
 
 
-Refiners = List[Callable[[Names], Names]]
+Refiners = Tuple[Callable[[Names], Names], ...]
 
-UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
+UNIQUE_REFINERS: Refiners = (remove_short, remove_synonyms, remove_nonlatin)
 
-REFINERS: Refiners = [identity_function] + list(
+REFINERS: Refiners = (identity_function,) + tuple(
     map(
         partial(reduce, compose),
         chain(

@@ -1,10 +1,10 @@
+from __future__ import division
 import json
 import logging
 import io
 import functools
-from typing import List, Dict, Callable, Any, Union, Iterator, TypeVar, Optional, IO
 from collections import defaultdict
-
+from typing import List, Dict, Callable, Any, Union, Iterator, TypeVar, Optional, IO
 
 Names = List[str]
 TextOrNames = Union[str, Names]
@@ -19,12 +19,12 @@ def compose(
 ) -> Callable:
     use_cache = False
     try:
-        f = f.__wrapped__
+        f = f.__wrapped__  # type: ignore
         use_cache = True
     except AttributeError:
         pass
     try:
-        g = g.__wrapped_
+        g = g.__wrapped__  # type: ignore
         use_cache = True
     except AttributeError:
         pass
