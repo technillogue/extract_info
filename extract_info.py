@@ -107,7 +107,12 @@ if __name__ == "__main__":
         rows = [
             list(triple)
             for entry in entries
-            for triple in itertools.zip_longest(*map(entry.get, header), "")
+            for triple in itertools.zip_longest(
+                *map(entry.get, header), ""  # type: ignore
+            )
+            # this has incompatible type "*Iterator[Optional[List[str]]]"; expected "Iterable[Any]"
+            # but I don't remember the logic for this, so I'm leaving it alone until
+            # I decide to replace this with long instead of wide format
         ]
         with open("data/info.csv", "w", encoding="utf-8") as f:
             writer = csv.writer(f)

@@ -7,18 +7,18 @@ import extract_names
 import utils
 from tools import ask, fd_print
 
-# our code has three step and various ways of doing each step,
+# our code has three step and various strategies for  each step,
 # which it does in order until one works
-# as soon as a given way of doing this step doesn't work, it should jump
-# to the next way of doing this step without trying the next steps
+# as soon as a given strategy for this step doesn't work, it should jump
+# to the next strategy for this step without trying the next steps
 
 # this corresponds to a finate state automata
-# where the symbols are the names of each way of doing each step
-# and the states are the combinations of ways of doing each step,
+# where the symbols are the names of each strategy for each step
+# and the states are the combinations of strategies for each step,
 # including "not doing this step right now" as the 0th state
 
 # because every FSA corresponds to a regex, we know that there exists a
-# regex that match correct paths. we can log which functions are called
+# regex that match correct paths. we can log which strategies are called
 # and see if they match the regex to test correct program flow
 
 
@@ -28,28 +28,30 @@ def correct_pattern_gen(items: List[str], suffix: str) -> str:
     return f"{items[0]}\n({suffix}|{correct_pattern_gen(items[1:], suffix)})"
 
 
+STEPS_STRATEGY_NAMES: List[List[str]] = [
+    [strategy.__name__ for strategy in step] for step in extract_names.STEPS
+]
+
+
+CORRECT_PATTERN = ""
+for step_strategy_names in reversed(STEPS_STRATEGY_NAMES):
+    CORRECT_PATTERN = correct_pattern_gen(step_strategy_names, CORRECT_PATTERN)
+
+
 def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
     logger = utils.Logger()
 
     def wrap_logging(funcs: List[Callable]) -> List[Callable]:
         return [logger.logged(func) for func in funcs]
 
-    methods = {
+    steps = {
         "refiners": wrap_logging(extract_names.REFINERS),
         "crude_extractors": wrap_logging(extract_names.CRUDE_EXTRACTORS),
         "google_extractors": wrap_logging(extract_names.GOOGLE_EXTRACTORS),
     }
-    methods_names: List[List[str]] = [
-        [f.__name__ for f in category] for category in methods.values()
-    ]
-    correct_pattern = ""
-    for method_names in methods_names:
-        correct_pattern = correct_pattern_gen(method_names, correct_pattern)
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
-        result = extract_info.extract_info(*args, **methods, **kwargs)
-        log_trace = logger.stream.getvalue()
-        assert re.fullmatch(correct_pattern, log_trace) is not None
+        result = extract_info.extract_info(*args, **steps, **kwargs)
         return result
 
     return (logger, traced_extract_info)
@@ -75,13 +77,15 @@ def test_cases(
     correct_case: Entry, trace_extract_info: Tuple[utils.Logger, Callable]
 ) -> None:
     logger, traced_extract_info = trace_extract_info
-    logger.new_stream()
+    stream = logger.new_stream()
     line = correct_case["line"][0]
     actual = traced_extract_info(line)
     if actual != correct_case:
         breakpoint()
         actual = extract_info.extract_info(line)
     assert actual == correct_case
+    log_trace = stream.getvalue()
+    assert re.fullmatch(CORRECT_PATTERN, log_trace) is not None
 
 
 DIFFICULT_CASES: List[Entry]

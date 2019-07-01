@@ -12,7 +12,9 @@ def extract_entities(text: str, encoding: str = "UTF32") -> List[str]:
             "encoding_type": encoding,
         }
         service = googleapiclient.discovery.build("language", "v1")
-        request = service.documents().analyzeEntities(body=body)  # noqa
+        request = service.documents().analyzeEntities(  # pylint: disable=no-member
+            body=body
+        )
         response = request.execute()
     except HttpError:
         return []

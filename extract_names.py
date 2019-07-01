@@ -151,6 +151,12 @@ REFINERS: Refiners = (identity_function,) + tuple(
     )
 )
 
+STEPS: Tuple[Extractors, Extractors, Refiners] = [
+    GOOGLE_EXTRACTORS,
+    CRUDE_EXTRACTORS,
+    REFINERS,
+]
+
 
 def extract_names(
     text: str,
