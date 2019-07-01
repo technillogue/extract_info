@@ -1,7 +1,7 @@
 import string
 from itertools import permutations, combinations, filterfalse, chain  # , starmap
 from functools import reduce, partial
-from typing import List, Tuple, Callable, Iterator
+from typing import List, Tuple, Callable, Iterator, Sequence
 import google_analyze
 from utils import cache, compose, identity_function, soft_filter
 
@@ -46,15 +46,12 @@ def all_capitalized_extract_names(text: str) -> List[str]:
         for word in text.split()
         if word[0].isupper()
         and not all(map(str.isupper, word[1:]))  # McCall is a name, but ELISEVER isn't
-        # TODO: remove the tuple stuff, it was a bad idea
     ]
 
 
-Extractors = Tuple[Callable[[str], Names], ...]
-# stylistic tradeoff, a list would be more appropriate for this homogenous data
-# but having an immutable type means I can safely pass it as a default without disabling pylint
+Extractors = Sequence[Callable[[str], Names]]
 
-CRUDE_EXTRACTORS: Extractors = (nltk_extract_names, all_capitalized_extract_names)
+CRUDE_EXTRACTORS: Extractors = [nltk_extract_names, all_capitalized_extract_names]
 
 ### google extractor and preprocessors
 
@@ -88,7 +85,7 @@ def every_name(line: str) -> str:
     # explore some option for merging adjacent names?
 
 
-GOOGLE_EXTRACTORS: Extractors = tuple(
+GOOGLE_EXTRACTORS: Extractors = list(
     map(
         partial(compose, google_extract_names),
         [only_alpha, identity_function, every_name],
@@ -137,11 +134,11 @@ def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
 
 
-Refiners = Tuple[Callable[[Names], Names], ...]
+Refiners = Sequence[Callable[[Names], Names]]
 
-UNIQUE_REFINERS: Refiners = (remove_short, remove_synonyms, remove_nonlatin)
+UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
 
-REFINERS: Refiners = (identity_function,) + tuple(
+REFINERS: Refiners = [identity_function] + list(
     map(
         partial(reduce, compose),
         chain(
@@ -155,20 +152,21 @@ REFINERS: Refiners = (identity_function,) + tuple(
     )
 )
 
-STEPS: Tuple[Extractors, Extractors, Refiners] = [
+STEPS: Tuple[Extractors, Extractors, Refiners] = (
     GOOGLE_EXTRACTORS,
     CRUDE_EXTRACTORS,
     REFINERS,
-]
+)
 
 
-def extract_names(
+def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments
     text: str,
     min_names: int,
     max_names: int,
     google_extractors: Extractors = GOOGLE_EXTRACTORS,
     crude_extractors: Extractors = CRUDE_EXTRACTORS,
     refiners: Refiners = REFINERS,
+    # TODO: refactor the default arguments into one
 ) -> Names:
     def min_criteria(names: Names) -> bool:
         return len(names) >= min_names
