@@ -42,7 +42,11 @@ def nltk_extract_names(text: str) -> Names:
 
 def all_capitalized_extract_names(text: str) -> List[str]:
     return [
-        "".join(filter(str.isalpha, word)) for word in text.split() if word[0].isupper()
+        "".join(filter(str.isalpha, word))
+        for word in text.split()
+        if word[0].isupper()
+        and not all(map(str.isupper, word[1:]))  # McCall is a name, but ELISEVER isn't
+        # TODO: remove the tuple stuff, it was a bad idea
     ]
 
 
