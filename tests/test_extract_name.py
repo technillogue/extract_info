@@ -1,5 +1,4 @@
 import extract_names
-import pdb
 
 
 def test_contains_nonlatin() -> None:
@@ -22,7 +21,7 @@ def test_no_google() -> None:
     )
     expected = ["Lisa"]
     if actual != expected:
-        pdb.set_trace()
+        breakpoint()
         extract_names.extract_names(
             "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
             1,

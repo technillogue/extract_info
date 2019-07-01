@@ -1,13 +1,11 @@
 import re
-import random
-import os
-import pdb
 import json
-from typing import Dict, List, Iterable, Any, Tuple, Callable
+from typing import Dict, List, Any, Tuple, Callable
 import pytest
 import extract_info
 import extract_names
 import utils
+from tools import ask, fd_print
 
 
 # R_good = "R1( R2( R3)?)??"
@@ -56,7 +54,7 @@ def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
         "crude_extractors": wrap_logging(extract_names.CRUDE_EXTRACTORS),
         "google_extractors": wrap_logging(extract_names.GOOGLE_EXTRACTORS),
     }
-    methods_names: List[str] = [
+    methods_names: List[List[str]] = [
         [f.__name__ for f in category] for category in methods.values()
     ]
     correct_pattern = ""
@@ -65,7 +63,7 @@ def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
         result = extract_info.extract_info(*args, **methods, **kwargs)
-        #        assert re.fullmatch(correct_pattern, logger.stream.getvalue()) is not None
+        # assert re.fullmatch(correct_pattern, logger.stream.getvalue()) is not None
         return result
 
     return (logger, traced_extract_info)
@@ -91,11 +89,11 @@ def test_cases(
     correct_case: Entry, trace_extract_info: Tuple[utils.Logger, Callable]
 ) -> None:
     logger, traced_extract_info = trace_extract_info
-    stream = logger.new_stream()
+    logger.new_stream()
     line = correct_case["line"][0]
     actual = traced_extract_info(line)
     if actual != correct_case:
-        pdb.set_trace()
+        breakpoint()
         actual = extract_info.extract_info(line)
     assert actual == correct_case
 
@@ -107,31 +105,6 @@ DIFFICULT_CASES = json.load(open("data/incorrect_cases.json", encoding="utf-8"))
 @pytest.fixture(params=DIFFICULT_CASES, name="difficult_case")
 def difficult_case_fixture(request: Any) -> Entry:
     return request.param
-
-
-def fd_print(text: str, end: str = "\n") -> None:
-    with os.fdopen(os.dup(1), "w") as stdout:
-        stdout.write(text + end)
-
-
-def fd_input(prompt: str) -> str:
-    fd_print("\n{}".format(prompt))
-    with os.fdopen(os.dup(2), "r") as stdin:
-        return stdin.readline()
-
-
-def ask(case: Dict, show_contact_info: bool = False) -> bool:
-    fd_print(f"\nLINE: {case['line']}")
-    fd_print(f"NAMES: {case['names']}")
-    if show_contact_info:
-        fd_print(f"PHONES: {case['phones']}")
-        fd_print(f"EMAILS: {case['emails']}")
-    correctness = fd_input("correct? ([y]es/no, default yes) ").lower() in [
-        "",
-        "y",
-        "yes",
-    ]
-    return correctness
 
 
 @pytest.mark.skip
