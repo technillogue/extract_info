@@ -1,6 +1,7 @@
 import re
 import json
 from typing import Dict, List, Any, Tuple, Callable
+from functools import reduce
 import pytest
 import extract_info
 import extract_names
@@ -22,20 +23,17 @@ from tools import ask, fd_print
 # and see if they match the regex to test correct program flow
 
 
-def correct_pattern_gen(items: List[str], suffix: str) -> str:
+def correct_pattern_gen(suffix: str, items: List[str]) -> str:
     if len(items) == 1:
         return items[0] + "\n" + suffix
-    return f"{items[0]}\n({suffix}|{correct_pattern_gen(items[1:], suffix)})"
+    return f"{items[0]}\n({suffix}|{correct_pattern_gen(suffix, items[1:])})"
 
 
 STEPS_STRATEGY_NAMES: List[List[str]] = [
     [strategy.__name__ for strategy in step] for step in extract_names.STEPS
 ]
 
-
-CORRECT_PATTERN = ""
-for step_strategy_names in reversed(STEPS_STRATEGY_NAMES):
-    CORRECT_PATTERN = correct_pattern_gen(step_strategy_names, CORRECT_PATTERN)
+CORRECT_PATTERN = reduce(correct_pattern_gen, reversed(STEPS_STRATEGY_NAMES), "")
 
 
 def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
