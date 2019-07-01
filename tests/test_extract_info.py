@@ -65,9 +65,7 @@ def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
         result = extract_info.extract_info(*args, **methods, **kwargs)
-        # assert re.fullmatch(
-        #     correct_pattern, logger.stream.getvalue()
-        # ) is not None
+        #        assert re.fullmatch(correct_pattern, logger.stream.getvalue()) is not None
         return result
 
     return (logger, traced_extract_info)
@@ -136,6 +134,7 @@ def ask(case: Dict, show_contact_info: bool = False) -> bool:
     return correctness
 
 
+@pytest.mark.skip
 @pytest.mark.xfail
 def test_difficult_cases(difficult_case: Entry) -> None:
     """these are examples that were marked as incorrect, if we have

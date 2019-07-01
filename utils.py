@@ -15,19 +15,25 @@ def identity_function(x: Any) -> Any:
 
 
 def compose(
-    f: Callable[[TextOrNames, Optional[bool]], Names],
-    g: Callable[[TextOrNames, Optional[bool]], TextOrNames],
+    f: Callable[[TextOrNames], Names], g: Callable[[TextOrNames], TextOrNames]
 ) -> Callable:
-    f_kw, g_kw = (
-        {"no_cache": True} if func.__name__.endswith("_cached") else {}
-        for func in (f, g)
-    )
+    use_cache = False
+    try:
+        f = f.__wrapped__
+        use_cache = True
+    except AttributeError:
+        pass
+    try:
+        g = g.__wrapped_
+        use_cache = True
+    except AttributeError:
+        pass
 
     def composed_function(arg: TextOrNames) -> Names:
-        return f(g(arg, **g_kw), **f_kw)
+        return f(g(arg))
 
     composed_function.__name__ = "_".join((f.__name__, g.__name__))
-    if "_cached" in composed_function.__name__:
+    if use_cache:
         return cache.with_cache(composed_function)
     return composed_function
 
@@ -112,14 +118,7 @@ class Cache:
         self.func_names.append(func_name)
 
         @functools.wraps(func)
-        def wrapper(
-            arg1: Union[str, List[str]],
-            *args: Any,
-            no_cache: bool = False,
-            **kwargs: Any
-        ) -> Any:
-            if no_cache:
-                return func(arg1, *args, **kwargs)
+        def wrapper(arg1: Union[str, List[str]], *args: Any, **kwargs: Any) -> Any:
             if isinstance(arg1, list):
                 key = json.dumps(arg1)
             else:
@@ -136,7 +135,6 @@ class Cache:
             self.cache[key][func_name] = value
             return value
 
-        wrapper.__name__ += "_cached"
         return wrapper
 
 
