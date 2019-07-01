@@ -51,7 +51,7 @@ def soft_filter(
     otherwise, if none of the items in iter satisfy predicate, return the last
     item in iter"""
     if default_if_empty is None:
-        default_if_empty: X = []
+        default_if_empty: X = []  # type: ignore
     last = default_if_empty
     empty = True
     while True:
@@ -62,7 +62,7 @@ def soft_filter(
                 yield last
         except StopIteration:
             if empty:
-                yield last
+                yield last  # type: ignore
             break
 
 

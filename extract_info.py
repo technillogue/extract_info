@@ -35,23 +35,28 @@ def extract_emails(text: str) -> List[str]:
     return EMAIL_RE.findall(text)
 
 
+def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
+    contact_counts: Tuple[int, int] = (len(emails), len(phones))
+    # if there's 1 email and 3 phones, min_names should be 1
+    # but if there's 0 email and 1 phone, it should be 1, not 0
+    min_names: int = max(1, min(contact_counts))
+    max_names: int = sum(contact_counts)
+    return (min_names, max_names)
+
+
 def extract_info(
     raw_line: str, flags: bool = False, **extract_names_kwargs: Any
 ) -> Dict[str, List[str]]:
     line: str = raw_line.replace("'", "").replace("\n", "")
     emails: List[str] = extract_emails(line)
     phones: List[str] = extract_phones(line)
-    contact_counts: Tuple[int, int] = (len(emails), len(phones))
-    max_contacts: int = sum(contact_counts)
-    # if there's 1 email and 3 phones, min_contacts should be 1
-    # but if there's 0 email and 1 phone, it should be 1, not 0
-    min_contacts: int = max(1, min(contact_counts))
+    min_names, max_names = min_max_names(emails, phones)
     names: List[str]
-    if max_contacts == 0:
+    if max_names == 0:
         names = ["skipped"]
     else:
         names = extract_names(
-            space_dashes(line), min_contacts, max_contacts, **extract_names_kwargs
+            space_dashes(line), min_names, max_names, **extract_names_kwargs
         )
     print(".", end="")
     sys.stdout.flush()
@@ -60,12 +65,12 @@ def extract_info(
         return {
             **result,
             "flags": ["skipped"]
-            if not max_contacts
+            if not max_names
             else [
-                "one contact" if max_contacts == 1 else "multiple contacts",
+                "one contact" if max_names == 1 else "multiple names",
                 "not enough"
-                if len(names) < min_contacts
-                else ("correct" if len(names) <= max_contacts else "too many"),
+                if len(names) < min_names
+                else ("correct" if len(names) <= max_names else "too many"),
                 "all",
             ],
         }
@@ -107,8 +112,8 @@ if __name__ == "__main__":
         rows = [
             list(triple)
             for entry in entries
-            for triple in itertools.zip_longest(
-                *map(entry.get, header), ""  # type: ignore
+            for triple in itertools.zip_longest(  # type: ignore
+                *map(entry.get, header), ""
             )
             # this has incompatible type "*Iterator[Optional[List[str]]]"; expected "Iterable[Any]"
             # but I don't remember the logic for this, so I'm leaving it alone until
