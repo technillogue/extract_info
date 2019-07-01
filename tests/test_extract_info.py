@@ -7,40 +7,25 @@ import extract_names
 import utils
 from tools import ask, fd_print
 
+# our code has three step and various ways of doing each step,
+# which it does in order until one works
+# as soon as a given way of doing this step doesn't work, it should jump
+# to the next way of doing this step without trying the next steps
 
-# R_good = "R1( R2( R3)?)??"
-# R_fail = "R1R2R3"
-# C_good = f"C1 {R_good} (C2 {R_good})"
-# G_good = f"G1({C_good})?G2
-# there's a few versions that are acceptable
-# g1, c1, r1, r2, c2, r1, r2, g2, c1, r1, r2, etc would make sense
-# but if g1 is wrong we need to immediately skip to g2
-# if c1 is wrong we need to immediately skip to c2 without trying to refine
+# this corresponds to a finate state automata
+# where the symbols are the names of each way of doing each step
+# and the states are the combinations of ways of doing each step,
+# including "not doing this step right now" as the 0th state
 
-# start -> g1 -> g2 -> g3 -> fail
-# g{n} -> c1 -> c2 -> g{n+1}
-# c{n} -> r1 -> r2 -> r3 -> c{n+1}
-# r{n} -> success
-
-# simpler complete version
-# g1 -> (c1, g2)
-# g2 -> (c1, fail)
-# c1 -> (r1, c2)
-# c2 -> (r1, g2)
-# r1 -> (success, r2)
-# r2 -> (success, c2)
-
-# if this is an FSM there should be a regex for it
-# using a shorthand where [gcr][12] is one char
+# because every FSA corresponds to a regex, we know that there exists a
+# regex that match correct paths. we can log which functions are called
+# and see if they match the regex to test correct program flow
 
 
 def correct_pattern_gen(items: List[str], suffix: str) -> str:
     if len(items) == 1:
         return items[0] + "\n" + suffix
-    return f"{items[0]}\n{suffix}({correct_pattern_gen(items[1:], suffix)})?".replace(
-        "\n\n", "\n"
-    )
-    # awful hack please debug
+    return f"{items[0]}\n({suffix}|{correct_pattern_gen(items[1:], suffix)})"
 
 
 def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
@@ -63,7 +48,8 @@ def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
         result = extract_info.extract_info(*args, **methods, **kwargs)
-        # assert re.fullmatch(correct_pattern, logger.stream.getvalue()) is not None
+        log_trace = logger.stream.getvalue()
+        assert re.fullmatch(correct_pattern, log_trace) is not None
         return result
 
     return (logger, traced_extract_info)
