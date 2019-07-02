@@ -1,9 +1,9 @@
 import string
-from itertools import permutations, combinations, filterfalse, chain  # , starmap
-from functools import reduce, partial
-from typing import List, Tuple, Callable, Iterator, Sequence
+from itertools import permutations, combinations, filterfalse
+from functools import reduce
+from typing import List, Callable, Iterator, Sequence
 import google_analyze
-from utils import cache, compose, identity_function, soft_filter
+from utils import cache, compose, soft_filter
 
 Names = List[str]
 
@@ -79,22 +79,25 @@ def only_alpha(text: str) -> str:
     )
 
 
+def no_preprocess(text: str) -> str:
+    return text
+
+
 @cache.with_cache
-def every_name(line: str) -> str:
-    return "".join(map("My name is {}. ".format, only_alpha(line).split()))
+def every_name(text: str) -> str:
+    return "".join(map("My name is {}. ".format, only_alpha(text).split()))
     # explore some option for merging adjacent names?
 
 
-GOOGLE_EXTRACTORS: Extractors = list(
-    map(
-        partial(compose, google_extract_names),
-        [only_alpha, identity_function, every_name],
-    )
-)
+GOOGLE_PREPROCESSES: List[Callable[[str], str]] = [only_alpha, no_preprocess, every_name]
+
+GOOGLE_EXTRACTORS: Extractors = [
+    compose(google_extract_names, preprocess)
+    for preprocess in GOOGLE_PREPROCESSES
+]
+
 
 ## refiners
-
-
 def fuzzy_intersect(google_names: Names, crude_names: Names) -> Names:
     if google_names == []:
         return crude_names
@@ -134,29 +137,25 @@ def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
 
 
-Refiners = Sequence[Callable[[Names], Names]]
+Refiners = List[Callable[[Names], Names]]
 
 UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
 
-REFINERS: Refiners = [identity_function] + list(
-    map(
-        partial(reduce, compose),
-        chain(
-            *(
-                map(
-                    partial(combinations, UNIQUE_REFINERS),
-                    range(1, len(UNIQUE_REFINERS)),
-                )
-            )
-        ),
-    )
-)
 
-STEPS: Tuple[Extractors, Extractors, Refiners] = (
-    GOOGLE_EXTRACTORS,
-    CRUDE_EXTRACTORS,
-    REFINERS,
-)
+# REFINERS: Refiners = []
+# for i in range(1, len(UNIQUE_REFINERS)):
+#     for combination in combinations(UNIQUE_REFINERS, i):
+#         refiner: Callable[[Names], Names] = reduce(compose, combination)
+#         REFINERS.append(refiner)
+
+
+REFINERS: Refiners = [lambda names: names] + [
+    reduce(compose, combination)
+    for i in range(1, len(UNIQUE_REFINERS))
+    for combination in combinations(UNIQUE_REFINERS, i)
+]
+
+STEPS: Sequence[Sequence[Callable]] = (GOOGLE_EXTRACTORS, CRUDE_EXTRACTORS, REFINERS)
 
 
 def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments

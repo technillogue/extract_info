@@ -4,22 +4,45 @@ import logging
 import io
 import functools
 from collections import defaultdict
-from typing import List, Dict, Callable, Any, Union, Iterator, TypeVar, Optional, IO
+from typing import (
+    List,
+    Dict,
+    Callable,
+    Any,
+    Union,
+    Iterator,
+    TypeVar,
+    Optional,
+    IO,
+    overload,
+)
 
+T = TypeVar("T")
 Names = List[str]
-TextOrNames = Union[str, Names]
 
 
-def identity_function(x: Any) -> Any:
-    return x
-
-
+# e.g.  google_extract_names(preprocess(text))
+@overload
 def compose(
-    f: Callable[[TextOrNames], Names], g: Callable[[TextOrNames], TextOrNames]
-) -> Callable:
+    f: Callable[[str], Names],  # pylint: disable=unused-argument
+    g: Callable[[str], str],  # pylint: disable=unused-argument
+) -> Callable[[str], Names]:
+    pass
+
+
+# e.g. remove_nonlatin(remove_synonyms(names))
+@overload
+def compose(  # pylint: disable=function-redefined
+    f: Callable[[Names], Names], # pylint: disable=unused-argument
+    g: Callable[[Names], Names],  # pylint: disable=unused-argument
+) -> Callable[[Names], Names]: 
+    pass
+
+
+def compose(f: Any, g: Any) -> Any:  # pylint: disable=function-redefined
     use_cache = False
     try:
-        f = f.__wrapped__  # type: ignore
+        f = f.__wrapped__  # type: ignore # mypy doesn't know about @wraps
         use_cache = True
     except AttributeError:
         pass
@@ -29,7 +52,7 @@ def compose(
     except AttributeError:
         pass
 
-    def composed_function(arg: TextOrNames) -> Names:
+    def composed_function(arg: Union[str, Names]) -> Names:
         return f(g(arg))
 
     composed_function.__name__ = "_".join((f.__name__, g.__name__))
@@ -38,20 +61,17 @@ def compose(
     return composed_function
 
 
-X = TypeVar("X")
-
-
 def soft_filter(
-    predicate: Callable[[X], bool],
-    seq: Iterator[X],
-    default_if_empty: Union[X, None, List] = None,
-) -> Iterator[X]:
+    predicate: Callable[[T], bool],
+    seq: Iterator[T],
+    default_if_empty: Union[T, None, List] = None,
+) -> Iterator[T]:
     """filter, but always returning at least one item.
     if iter is empty, return default_if_empty
     otherwise, if none of the items in iter satisfy predicate, return the last
     item in iter"""
     if default_if_empty is None:
-        default_if_empty: X = []  # type: ignore
+        default_if_empty: T = []  # type: ignore
     last = default_if_empty
     empty = True
     while True:
@@ -166,8 +186,8 @@ class Logger:
     def get_log(self) -> str:
         if isinstance(self.stream, io.StringIO):
             return self.stream.getvalue()
-        else:
-            raise NotImplementedError
+        raise NotImplementedError
+
 
 cache = Cache()
 cache.open_cache()
