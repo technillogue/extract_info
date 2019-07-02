@@ -61,71 +61,63 @@ trace_extract_info_fixture = pytest.fixture(
 
 
 Entry = Dict[str, List[str]]
-
-CASES: List[Entry] = json.load(open("data/correct_cases.json", encoding="utf-8"))
-
-DIFFICULT_CASES: List[Entry] = json.load(
-    open("data/incorrect_cases.json", encoding="utf-8")
-)
-
-LABELED_CASES: List[Tuple[Entry, bool]] = [(case, True) for case in CASES] + [
-    (case, False) for case in DIFFICULT_CASES
-]
+EXAMPLES_FNAME = "data/examples.json"
+EXAMPLES: List[Entry] = json.load(open(EXAMPLES_FNAME, encoding="utf-8"))
+COUNTEREXAMPLES_FNAME = "data/counterexamples.json"
+COUNTEREXAMPLES: List[Entry] = json.load(open(COUNTEREXAMPLES_FNAME, encoding="utf-8"))
+LABELED_EXAMPLES: List[Tuple[Entry, bool]] = [
+    (example, True) for example in EXAMPLES
+] + [(example, False) for example in COUNTEREXAMPLES]
 
 
-@pytest.fixture(params=LABELED_CASES, name="labeled_case")
-def labeled_case_fixture(request: Any) -> Tuple[Entry, bool]:
+@pytest.fixture(params=LABELED_EXAMPLES, name="labeled_example")
+def labeled_example_fixture(request: Any) -> Tuple[Entry, bool]:
     return request.param
 
 
-@pytest.fixture(params=CASES, name="correct_case")
-def correct_case_fixture(request: Any) -> Entry:
-    return request.param
-
-
-def test_cases(
-    correct_case: Entry, trace_extract_info: Tuple[utils.Logger, Callable]
+def test_examples(
+    labeled_example: Tuple[Entry, bool],
+    trace_extract_info: Tuple[utils.Logger, Callable],
 ) -> None:
     logger, traced_extract_info = trace_extract_info
     logger.new_stream()
-    line = correct_case["line"][0]
+    example, correct = labeled_example
+    line = example["line"][0]
     actual = traced_extract_info(line)
-    if actual != correct_case:
-        breakpoint()
-        actual = extract_info.extract_info(line)
-    assert actual == correct_case
+    min_names, max_names = extract_info.min_max_names(
+        example["emails"], example["phones"]
+    )
+    # check trace
     log_trace = logger.get_log()
-    assert re.fullmatch(CORRECT_PATTERN, log_trace) is not None
-
-
-@pytest.fixture(params=DIFFICULT_CASES, name="difficult_case")
-def difficult_case_fixture(request: Any) -> Entry:
-    return request.param
-
-
-@pytest.mark.skip
-@pytest.mark.xfail
-def test_difficult_cases(difficult_case: Entry) -> None:
-    """these are examples that were marked as incorrect, if we have
-    different anaswers for them that means there might be improvement"""
-    line = difficult_case["line"][0]
-    actual_case: Entry = extract_info.extract_info(line)
-    if actual_case["names"] != difficult_case["names"]:
-        correct = ask(actual_case)
+    actual_names = len(actual["names"])
+    if actual_names <= max_names:
+        if actual_names >= min_names:
+            assert re.fullmatch(CORRECT_PATTERN, log_trace) is not None
+        else:
+            # check that it matches not enough
+            pass
+    else:
+        # check that it matches too many
+        pass
+    # check corectness
+    if actual != example:
+        # really_correct = ask(example)
+        # reclassify
+        # correct = ask(actual_case)
+        # if correct:
+        #     json.dump(
+        #         [case for case in DIFFICULT_CASES if case != difficult_case],
+        #         open("data/incorrect_cases.json", "w", encoding="utf-8"),
+        #         indent=4,
+        #     )
+        #     json.dump(
+        #         CASES + [actual_case],
+        #         open("data/correct_cases.json", "w", encoding="utf-8"),
+        #         indent=4,
+        #     )
+        #     fd_print("marked as a correct example")
         if correct:
-            json.dump(
-                [case for case in DIFFICULT_CASES if case != difficult_case],
-                open("data/incorrect_cases.json", "w", encoding="utf-8"),
-                indent=4,
-            )
-            json.dump(
-                CASES + [actual_case],
-                open("data/correct_cases.json", "w", encoding="utf-8"),
-                indent=4,
-            )
-            fd_print("marked as a correct example")
-            # just move this into the other one
-    assert actual_case["names"] != difficult_case["names"]
+            assert actual == example
 
 
 def test_last() -> None:
