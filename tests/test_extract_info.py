@@ -1,6 +1,6 @@
 import re
 import json
-from typing import Dict, List, Any, Tuple, Callable
+from typing import Dict, List, Any, Tuple, Callable, Sequence
 from functools import reduce
 import pytest
 import extract_info
@@ -39,7 +39,7 @@ CORRECT_PATTERN = reduce(correct_pattern_gen, reversed(STEPS_STRATEGY_NAMES), ""
 def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
     logger = utils.Logger()
 
-    def wrap_logging(funcs: List[Callable]) -> List[Callable]:
+    def wrap_logging(funcs: Sequence[Callable]) -> Sequence[Callable]:
         return [logger.logged(func) for func in funcs]
 
     steps = {
@@ -49,7 +49,7 @@ def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
     }
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
-        result = extract_info.extract_info(*args, **steps, **kwargs)
+        result = extract_info.extract_info(*args, **steps, **kwargs)  # type: ignore
         return result
 
     return (logger, traced_extract_info)
@@ -62,8 +62,20 @@ trace_extract_info_fixture = pytest.fixture(
 
 Entry = Dict[str, List[str]]
 
-CASES: List[Entry]
-CASES = json.load(open("data/correct_cases.json", encoding="utf-8"))
+CASES: List[Entry] = json.load(open("data/correct_cases.json", encoding="utf-8"))
+
+DIFFICULT_CASES: List[Entry] = json.load(
+    open("data/incorrect_cases.json", encoding="utf-8")
+)
+
+LABELED_CASES: List[Tuple[Entry, bool]] = [(case, True) for case in CASES] + [
+    (case, False) for case in DIFFICULT_CASES
+]
+
+
+@pytest.fixture(params=LABELED_CASES, name="labeled_case")
+def labeled_case_fixture(request: Any) -> Tuple[Entry, bool]:
+    return request.param
 
 
 @pytest.fixture(params=CASES, name="correct_case")
@@ -75,19 +87,15 @@ def test_cases(
     correct_case: Entry, trace_extract_info: Tuple[utils.Logger, Callable]
 ) -> None:
     logger, traced_extract_info = trace_extract_info
-    stream = logger.new_stream()
+    logger.new_stream()
     line = correct_case["line"][0]
     actual = traced_extract_info(line)
     if actual != correct_case:
         breakpoint()
         actual = extract_info.extract_info(line)
     assert actual == correct_case
-    log_trace = stream.getvalue()
+    log_trace = logger.get_log()
     assert re.fullmatch(CORRECT_PATTERN, log_trace) is not None
-
-
-DIFFICULT_CASES: List[Entry]
-DIFFICULT_CASES = json.load(open("data/incorrect_cases.json", encoding="utf-8"))
 
 
 @pytest.fixture(params=DIFFICULT_CASES, name="difficult_case")
