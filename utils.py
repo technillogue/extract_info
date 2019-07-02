@@ -163,6 +163,11 @@ class Logger:
         self.log.addHandler(self.handler)
         return stream
 
+    def get_log(self) -> str:
+        if isinstance(self.stream, io.StringIO):
+            return self.stream.getvalue()
+        else:
+            raise NotImplementedError
 
 cache = Cache()
 cache.open_cache()
