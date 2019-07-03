@@ -155,7 +155,7 @@ REFINERS: Refiners = [lambda names: names] + [
     for combination in combinations(UNIQUE_REFINERS, i)
 ]
 
-STEPS: Sequence[Sequence[Callable]] = (GOOGLE_EXTRACTORS, CRUDE_EXTRACTORS, REFINERS)
+STAGES: Sequence[Sequence[Callable]] = (GOOGLE_EXTRACTORS, CRUDE_EXTRACTORS, REFINERS)
 
 
 def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments
