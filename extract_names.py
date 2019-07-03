@@ -140,7 +140,7 @@ def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
 
 
-Refiners = List[Callable[[Names], Names]]
+Refiners = Sequence[Callable[[Names], Names]]
 
 UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
 
@@ -158,7 +158,7 @@ STAGES: Tuple[Extractors, Extractors, Refiners] = (
 )
 
 
-def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments
+def extract_names(
     text: str,
     min_names: int,
     max_names: int,
@@ -176,11 +176,11 @@ def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments
     #       initial=text
     #   )
     #   for strategy_combination in product(*stages)
-    #)
-    #however, the overhead of wrapping everything into stages kind of sucks
-    #you could try making it homogenous
+    # )
+    # however, the overhead of wrapping everything into stages kind of sucks
+    # you could try making it homogenous
     # Strategy = Callable[[str, Names, Names], Tuple[str, Names, Names]]
-    
+
     def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
         yield from (attempt for attempt in attempts if len(attempt) >= min_names)
         yield []

@@ -4,62 +4,35 @@ import logging
 import io
 import functools
 from collections import defaultdict
-from typing import (
-    List,
-    Dict,
-    Callable,
-    Any,
-    Union,
-    Iterator,
-    TypeVar,
-    Optional,
-    IO,
-    overload,
-)
+from typing import List, Dict, Callable, Any, Union, Optional, IO, TypeVar
+from typing_extensions import Protocol, runtime_checkable
 
-T = TypeVar("T")
-Names = List[str]
+X = TypeVar("X")
+Y = TypeVar("Y")
+Z = TypeVar("Z")
 
 
-# e.g.  google_extract_names(preprocess(text))
-@overload
-def compose(
-    f: Callable[[str], Names],  # pylint: disable=unused-argument
-    g: Callable[[str], str],  # pylint: disable=unused-argument
-) -> Callable[[str], Names]:
-    pass
+@runtime_checkable
+class Wrapper(Protocol):
+    __wrapped__: Callable
 
 
-# e.g. remove_nonlatin(remove_synonyms(names))
-@overload
-def compose(  # pylint: disable=function-redefined
-    f: Callable[[Names], Names], # pylint: disable=unused-argument
-    g: Callable[[Names], Names],  # pylint: disable=unused-argument
-) -> Callable[[Names], Names]: 
-    pass
-
-
-def compose(f: Any, g: Any) -> Any:  # pylint: disable=function-redefined
+def compose(f: Callable[[Y], Z], g: Callable[[X], Y]) -> Callable[[X], Z]:
     use_cache = False
-    try:
-        f = f.__wrapped__  # type: ignore # mypy doesn't know about @wraps
+    if isinstance(f, Wrapper):
+        f = f.__wrapped__
         use_cache = True
-    except AttributeError:
-        pass
-    try:
-        g = g.__wrapped__  # type: ignore
+    if isinstance(g, Wrapper):
+        g = g.__wrapped__
         use_cache = True
-    except AttributeError:
-        pass
 
-    def composed_function(arg: Union[str, Names]) -> Names:
+    def composed_function(arg: X) -> Z:
         return f(g(arg))
 
     composed_function.__name__ = "_".join((f.__name__, g.__name__))
     if use_cache:
         return cache.with_cache(composed_function)
     return composed_function
-
 
 
 class Cache:
@@ -74,7 +47,7 @@ class Cache:
     # maybe add cache hit/miss statistics in the future
     def __init__(self, cache_name: str = "data/cache.json"):
         self.cache_name = cache_name
-        self.func_names: Names = []
+        self.func_names: List[str] = []
         self.cache: Dict[str, Dict[str, str]]
 
     def open_cache(self) -> None:

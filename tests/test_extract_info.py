@@ -1,6 +1,6 @@
 import re
 import json
-from typing import Dict, List, Any, Tuple, Callable, Sequence, cast
+from typing import Dict, List, Any, Tuple, Callable, Sequence
 import pytest
 import extract_info
 import extract_names
@@ -22,10 +22,10 @@ from tools import ask, fd_print
 # because every FSA corresponds to a regex, we know that there exists a
 # regex that match correct paths. we can log which strategies are called
 # and see if they match the regex to test correct program flow
-#
-# reminder:
-# a stage is made up out of strategies for that stage
-STAGES = cast(Sequence[Sequence[Callable]], extract_names.STAGES)
+
+STAGES: Sequence[Sequence[Callable]] = extract_names.STAGES
+# the original annotation is more specific, but we just care that
+# they're callables here
 STAGES_STRATEGY_NAMES: List[List[str]] = [
     [strategy.__name__ for strategy in step] for step in STAGES
 ]
@@ -100,20 +100,18 @@ LABELED_EXAMPLES: List[Tuple[Entry, bool]] = [
 ] + [(example, False) for example in COUNTEREXAMPLES]
 
 
-@pytest.fixture(params=LABELED_EXAMPLES, name="labeled_example")
-def labeled_example_fixture(request: Any) -> Tuple[Entry, bool]:
-    return request.param
+
+labeled_example_fixture = pytest.fixture(
+    params=LABELED_EXAMPLES, name="labeled_example"
+)(lambda request: request.param)
 
 
 def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
     logger = utils.Logger()
-    stages = tuple(
-        [logger.logged(strategy) for strategy in stage]
-        for stage in STAGES
-    )
+    stages = tuple([logger.logged(strategy) for strategy in stage] for stage in STAGES)
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
-        result = extract_info.extract_info(*args, stages=stages, **kwargs)  # type: ignore
+        result = extract_info.extract_info(*args, stages=stages, **kwargs)
         return result
 
     return (logger, traced_extract_info)
@@ -174,7 +172,9 @@ def test_examples(
                 add_to_list.remove(example)
                 fd_print("updating example")
             json.dump(
-                add_to_list + [actual], open(add_to_fname, "w", encoding="utf-8"), indent=4
+                add_to_list + [actual],
+                open(add_to_fname, "w", encoding="utf-8"),
+                indent=4,
             )
         if correct and not really_correct:
             assert actual == example
