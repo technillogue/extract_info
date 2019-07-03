@@ -5,50 +5,44 @@ import pytest
 import extract_info
 import extract_names
 import utils
-from tools import ask, fd_print
+from tools import reclassify, LABELED_EXAMPLES
 
-# NOTE: for reclassification, use --capture=sys
-
-# our code has three stages and various strategies for  each stage,
-# which it does in order until one works
-# as soon as a given strategy for this stage doesn't work, it should jump
-# to the next strategy for this stage without trying the next stages
-
-# this corresponds to a finate state automata
-# where the symbols are the names of each strategy for each stage
-# and the states are the combinations of strategies for each stage,
-# including "not doing this stage right now" as the 0th state
-
-# because every FSA corresponds to a regex, we know that there exists a
-# regex that match correct paths. we can log which strategies are called
-# and see if they match the regex to test correct program flow
+# NOTE: for reclassification to work, use pytest with --capture=sys
 
 STAGES: Sequence[Sequence[Callable]] = extract_names.STAGES
 # the original annotation is more specific, but we just care that
 # they're callables here
-STAGES_STRATEGY_NAMES: List[List[str]] = [
-    [strategy.__name__ for strategy in step] for step in STAGES
-]
-
-metatest_logger = utils.Logger()
 
 
 def regex_gen(
-    continuation_pattern: str,
-    terminal_pattern: str = "{last_strategy}\n{next_stages}",
-    stages_strategy_names: List[List[str]] = STAGES_STRATEGY_NAMES,
+    stages_strategy_names: List[List[str]], continuation_rule: str, terminal_rule: str
 ) -> str:
+    """
+    Generate a regex that should match a call trace following given rules.
+
+    Our code has three stages and various strategies for each stage, and tries
+    different combinations of strategies in a specific order.
+    This corresponds to a finate state automata where the symbols are the names
+    of each of each strategy and the states are the possibile combinations of
+    strategies for each stage (including "not doing this stage right now" as the
+    0th straegy.
+    We can inject logging to trace which strategies are tried.
+    Because each FSA corresponds to a regex, we can generate a regex that
+    matches correct sequences of calls.
+    """
+    metatest_logger = utils.Logger(log_name="metatest")
+
     @metatest_logger.logged
     def strategy_recurser(strategies: List[str], next_stages: str) -> str:
         if len(strategies) == 1:
-            return terminal_pattern.format(
+            return terminal_rule.format(
                 last_strategy=strategies[0], next_stages=next_stages
             )
         # how can our metaprogramming be real if our scopes aren't real
         # in other terms, variables not found in locals() will be first looked up in the
-        # context of *this call* of pattern_gen_gen-- that's why this trick works in the first place
+        # context of *this call* of strategy_recurser-- that's why this trick works in the first place
         next_strategies = strategy_recurser(strategies[1:], next_stages)
-        return continuation_pattern.format(
+        return continuation_rule.format(
             strategy=strategies[0],
             next_stages=next_stages,
             next_strategies=next_strategies,
@@ -67,38 +61,87 @@ def regex_gen(
     return stages_recurser(stages_strategy_names)
 
 
-REGEX_GEN_PATTERN = "stages_recurser\n" * len(
-    STAGES_STRATEGY_NAMES
-) + "strategy_recurser\n" * sum(
-    len(stage_strategies) for stage_strategies in STAGES_STRATEGY_NAMES
-)
+# the code tries each strategy until one of them works, then goes to the next stage,
+# until it gets a final result that works.
+# if a given stratgy for this stage doesn't work it should jump to the next
 
-NOT_ENOUGH_PATTERN = regex_gen(
-    continuation_pattern="{strategy}\n({next_stages})?{next_strategies}",
-    terminal_pattern="{last_strategy}\n({next_stages})?",
-)
-# hide your functions, hide your tests, because they're testing everyone out there there
-assert re.fullmatch(REGEX_GEN_PATTERN, metatest_logger.get_log()) is not None
+# if none of the strategies for a given stage work, it should go back to the
+# previous stage and try the next strategy there.
+# does in order until one works.
 
-CORRECT_PATTERN = regex_gen(
-    continuation_pattern="{strategy}\n({next_stages}|{next_strategies})"
-)
-TOO_MUCH_PATTERN = regex_gen(
-    continuation_pattern="{strategy}\n{next_stages}\n{next_strategies}"
-)
-
-# no rest for the test-driven wicked
-assert re.match(REGEX_GEN_PATTERN * 3, metatest_logger.get_log()) is not None
+# as soon as a given strategy for this stage doesn't work, it should jump
+# to the next strategy for this stage without trying the next stages
+PATTERN_DEFINITIONS = {
+    "correct": {
+        # try current strategy; if it works, next stage, otherwise, next strategy
+        "continuation_rule": "{strategy}\n({next_stages}|{next_strategies})",
+        # in the correct case, we get to every stage
+        "terminal_rule": "{last_strategy}\n{next_stages}",
+    },
+    "not enough": {
+        # we might not get to the next stage but we have to try every strategy
+        "continuation_rule": "{strategy}\n({next_stages})?{next_strategies}",
+        # don't need to go to the next if there isn't a working strategy
+        "terminal_rule": "{last_strategy}\n({next_stages})?",
+    },
+    "too much": {
+        # we just have to try every combination, because "works" is definied as
+        # "has enough items"-- we only check if there are too many at the very end
+        "continuation_rule": "{strategy}\n{next_stages}\n{next_strategies}",
+        "terminal_rule": "{last_strategy}\n{next_stages}",
+    },
+}
 
 Entry = Dict[str, List[str]]
-EXAMPLES_FNAME = "data/examples.json"
-EXAMPLES: List[Entry] = json.load(open(EXAMPLES_FNAME, encoding="utf-8"))
-COUNTEREXAMPLES_FNAME = "data/counterexamples.json"
-COUNTEREXAMPLES: List[Entry] = json.load(open(COUNTEREXAMPLES_FNAME, encoding="utf-8"))
-LABELED_EXAMPLES: List[Tuple[Entry, bool]] = [
-    (example, True) for example in EXAMPLES
-] + [(example, False) for example in COUNTEREXAMPLES]
 
+
+def generate_trace_tester() -> Callable[[Entry, str], None]:
+    stages_strategy_names: List[List[str]] = [
+        [strategy.__name__ for strategy in step] for step in STAGES
+    ]
+
+    metatest_logger = utils.Logger(log_name="metatest")
+
+    regex_gen_pattern = (
+        "stages_recurser\n" * len(stages_strategy_names)
+        + "strategy_recurser\n"
+        * sum(len(stage_strategies) for stage_strategies in stages_strategy_names)
+    ) * len(PATTERN_DEFINITIONS)
+
+    patterns = {
+        exit_type: regex_gen(stages_strategy_names, **definition)
+        for exit_type, definition in PATTERN_DEFINITIONS.items()
+    }
+    # no rest for the test-driven wicked
+    assert re.match(regex_gen_pattern, metatest_logger.get_log()) is not None
+
+    def trace_tester(result: Entry, trace: str) -> None:
+        name_limits: Tuple[int, int] = extract_info.min_max_names(
+            result["emails"], result["phones"]
+        )
+        exit_type = extract_info.decide_exit_type(result["names"], *name_limits)
+        assert re.fullmatch(patterns[exit_type], trace)
+
+    return trace_tester
+
+
+def trace_extract_info() -> Callable:
+    logger = utils.Logger()
+    stages = tuple([logger.logged(strategy) for strategy in stage] for stage in STAGES)
+    test_trace = generate_trace_tester()
+
+    def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
+        logger.new_stream()
+        result = extract_info.extract_info(*args, stages=stages, **kwargs)
+        test_trace(result, logger.get_log())
+        return result
+
+    return traced_extract_info
+
+
+trace_extract_info_fixture = pytest.fixture(name="traced_extract_info")(
+    trace_extract_info
+)
 
 
 labeled_example_fixture = pytest.fixture(
@@ -106,79 +149,24 @@ labeled_example_fixture = pytest.fixture(
 )(lambda request: request.param)
 
 
-def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
-    logger = utils.Logger()
-    stages = tuple([logger.logged(strategy) for strategy in stage] for stage in STAGES)
-
-    def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
-        result = extract_info.extract_info(*args, stages=stages, **kwargs)
-        return result
-
-    return (logger, traced_extract_info)
-
-
-trace_extract_info_fixture = pytest.fixture(
-    trace_extract_info_nonfixture, name="trace_extract_info"
-)
-
-
 def test_examples(
-    labeled_example: Tuple[Entry, bool],
-    trace_extract_info: Tuple[utils.Logger, Callable],
+    labeled_example: Tuple[Entry, bool], traced_extract_info: Callable
 ) -> None:
-    logger, traced_extract_info = trace_extract_info
-    logger.new_stream()
     example, correct = labeled_example
     line = example["line"][0]
-    actual = traced_extract_info(line)
-    min_names, max_names = extract_info.min_max_names(
-        example["emails"], example["phones"]
-    )
-    # check trace
-    log_trace = logger.get_log()
-    actual_names = len(actual["names"])
-    if actual_names <= max_names:
-        if actual_names >= min_names:
-            assert re.fullmatch(CORRECT_PATTERN, log_trace) is not None
-        else:
-            assert re.fullmatch(NOT_ENOUGH_PATTERN, log_trace) is not None
-    else:
-        assert re.fullmatch(TOO_MUCH_PATTERN, log_trace) is not None
-    # check corectness
+    try:
+        actual = traced_extract_info(line)
+    except AssertionError as e:
+        raise e
     if actual != example:
-        really_correct = ask(example)
-        # reclassify
-        if really_correct is True:
-            fd_print("marking as correct")
-            remove_from_list, remove_from_fname = (
-                COUNTEREXAMPLES,
-                COUNTEREXAMPLES_FNAME,
-            )
-            add_to_list, add_to_fname = (EXAMPLES, EXAMPLES_FNAME)
-        elif really_correct is False:
-            remove_from_list, remove_from_fname = (EXAMPLES, EXAMPLES_FNAME)
-            add_to_list, add_to_fname = (COUNTEREXAMPLES, COUNTEREXAMPLES_FNAME)
-            fd_print("marking as incorrect")
-        if isinstance(really_correct, bool):
-            if correct != really_correct:
-                fd_print("reclassifying")
-                remove_from_list.remove(example)
-                json.dump(
-                    remove_from_list,
-                    open(remove_from_fname, "w", encoding="utf-8"),
-                    indent=4,
-                )
+        really_correct = reclassify(actual, example)
+        if really_correct:
+            if correct:
+                assert actual == example
             else:
-                add_to_list.remove(example)
-                fd_print("updating example")
-            json.dump(
-                add_to_list + [actual],
-                open(add_to_fname, "w", encoding="utf-8"),
-                indent=4,
-            )
-        if correct and not really_correct:
-            assert actual == example
-
+                raise XFailed("output still the same as known wrong output")
+    # could try reclassifying everything in case something is falsely
+    # marked as wrong
 
 def test_last() -> None:
     # fake test

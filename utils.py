@@ -108,16 +108,16 @@ class Cache:
 
 
 class Logger:
-    def __init__(self, stream: Optional[IO] = None, log_name: str = "trace"):
+    def __init__(self, log_name: str = "trace", stream: Optional[IO] = None):
         self.log = logging.getLogger(log_name)
-        self.log.setLevel("INFO")
+        self.log.setLevel("DEBUG")
         self.handler: Optional[logging.Handler] = None
         self.new_stream(stream)
 
     def logged(self, fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            self.log.info(fn.__name__)
+            self.log.debug(fn.__name__)
             return fn(*args, **kwargs)
 
         return wrapper

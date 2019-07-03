@@ -44,6 +44,14 @@ def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
     return (min_names, max_names)
 
 
+def decide_exit_type(names: List[str], min_names: int, max_names: int) -> str:
+    names_count = len(names)
+    if names_count <= max_names:
+        if names_count < min_names:
+            return "not enough"
+        return "correct"
+    return "too much"
+
 def extract_info(
     raw_line: str, flags: bool = False, **extract_names_kwargs: Any
 ) -> Dict[str, List[str]]:
@@ -68,11 +76,9 @@ def extract_info(
             if not max_names
             else [
                 "one contact" if max_names == 1 else "multiple names",
-                "not enough"
-                if len(names) < min_names
-                else ("correct" if len(names) <= max_names else "too many"),
+                decide_exit_type(names, min_names, max_names),
                 "all",
-            ],
+            ]
         }
     return result
 
