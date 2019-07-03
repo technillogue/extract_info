@@ -5,8 +5,9 @@ import pytest
 import extract_info
 import extract_names
 import utils
+from tools import ask, fd_print
 
-# from tools import ask, fd_print
+# NOTE: for reclassification, use --capture=sys
 
 # our code has three stages and various strategies for  each stage,
 # which it does in order until one works
@@ -103,6 +104,7 @@ LABELED_EXAMPLES: List[Tuple[Entry, bool]] = [
 def labeled_example_fixture(request: Any) -> Tuple[Entry, bool]:
     return request.param
 
+
 def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
     logger = utils.Logger()
 
@@ -151,22 +153,35 @@ def test_examples(
         assert re.fullmatch(TOO_MUCH_PATTERN, log_trace) is not None
     # check corectness
     if actual != example:
-        # really_correct = ask(example)
+        really_correct = ask(example)
         # reclassify
-        # correct = ask(actual_case)
-        # if correct:
-        #     json.dump(
-        #         [case for case in DIFFICULT_CASES if case != difficult_case],
-        #         open("data/incorrect_cases.json", "w", encoding="utf-8"),
-        #         indent=4,
-        #     )
-        #     json.dump(
-        #         CASES + [actual_case],
-        #         open("data/correct_cases.json", "w", encoding="utf-8"),
-        #         indent=4,
-        #     )
-        #     fd_print("marked as a correct example")
-        if correct:
+        if really_correct is True:
+            fd_print("marking as correct")
+            remove_from_list, remove_from_fname = (
+                COUNTEREXAMPLES,
+                COUNTEREXAMPLES_FNAME,
+            )
+            add_to_list, add_to_fname = (EXAMPLES, EXAMPLES_FNAME)
+        elif really_correct is False:
+            remove_from_list, remove_from_fname = (EXAMPLES, EXAMPLES_FNAME)
+            add_to_list, add_to_fname = (COUNTEREXAMPLES, COUNTEREXAMPLES_FNAME)
+            fd_print("marking as incorrect")
+        if isinstance(really_correct, bool):
+            if correct != really_correct:
+                fd_print("reclassifying")
+                remove_from_list.remove(example)
+                json.dump(
+                    remove_from_list,
+                    open(remove_from_fname, "w", encoding="utf-8"),
+                    indent=4,
+                )
+            else:
+                add_to_list.remove(example)
+                fd_print("updating example")
+            json.dump(
+                add_to_list + [actual], open(add_to_fname, "w", encoding="utf-8"), indent=4
+            )
+        if correct and not really_correct:
             assert actual == example
 
 
