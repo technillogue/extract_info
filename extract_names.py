@@ -1,12 +1,12 @@
 import string
-from itertools import permutations, combinations, filterfalse
+from itertools import permutations, combinations, filterfalse, tee
 from functools import reduce
-from typing import List, Callable, Iterator, Sequence
+from typing import List, Callable, Iterator, Sequence, Tuple
 import google_analyze
-from utils import cache, compose, soft_filter
+from utils import cache, compose
 
 Names = List[str]
-
+NameAttempts = Iterator[Names]
 # general functions
 
 
@@ -89,11 +89,14 @@ def every_name(text: str) -> str:
     # explore some option for merging adjacent names?
 
 
-GOOGLE_PREPROCESSES: List[Callable[[str], str]] = [only_alpha, no_preprocess, every_name]
+GOOGLE_PREPROCESSES: List[Callable[[str], str]] = [
+    only_alpha,
+    no_preprocess,
+    every_name,
+]
 
 GOOGLE_EXTRACTORS: Extractors = [
-    compose(google_extract_names, preprocess)
-    for preprocess in GOOGLE_PREPROCESSES
+    compose(google_extract_names, preprocess) for preprocess in GOOGLE_PREPROCESSES
 ]
 
 
@@ -142,60 +145,67 @@ Refiners = List[Callable[[Names], Names]]
 UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
 
 
-# REFINERS: Refiners = []
-# for i in range(1, len(UNIQUE_REFINERS)):
-#     for combination in combinations(UNIQUE_REFINERS, i):
-#         refiner: Callable[[Names], Names] = reduce(compose, combination)
-#         REFINERS.append(refiner)
-
-
 REFINERS: Refiners = [lambda names: names] + [
     reduce(compose, combination)
     for i in range(1, len(UNIQUE_REFINERS))
     for combination in combinations(UNIQUE_REFINERS, i)
 ]
 
-STAGES: Sequence[Sequence[Callable]] = (GOOGLE_EXTRACTORS, CRUDE_EXTRACTORS, REFINERS)
+STAGES: Tuple[Extractors, Extractors, Refiners] = (
+    GOOGLE_EXTRACTORS,
+    CRUDE_EXTRACTORS,
+    REFINERS,
+)
 
 
 def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments
     text: str,
     min_names: int,
     max_names: int,
-    google_extractors: Extractors = GOOGLE_EXTRACTORS,
-    crude_extractors: Extractors = CRUDE_EXTRACTORS,
-    refiners: Refiners = REFINERS,
-    # TODO: refactor the default arguments into one
+    stages: Tuple[Extractors, Extractors, Refiners] = STAGES,
 ) -> Names:
-    def min_criteria(names: Names) -> bool:
-        return len(names) >= min_names
-
-    # does it contain nonlatin?
-    google_extractions: Iterator[Names] = soft_filter(
-        min_criteria, (extractor(text) for extractor in google_extractors)
-    )  # if so, google needs to return min_names - nonlatin names
-    crude_extractions: Iterator[Names] = soft_filter(
-        min_criteria, (extractor(text) for extractor in crude_extractors)
-    )  # set aside any nonlatin results
-    consensuses: Iterator[Names] = soft_filter(
-        min_criteria,
-        (
-            fuzzy_intersect(google_extraction, crude_extraction)
-            for google_extraction in google_extractions
-            for crude_extraction in crude_extractions
-        ),
-    )
-    # equal intersect, don't special-case google
-    # latin_consensuses = .. as above ...
-    # all_consensuses = filter(
-    #   min_criteria,
-    #   map(
-    #       lambda tuple:tuple[0]+tuple[1],
-    #       product([nonlatin_names, []], latin_consensues)
+    google_extractors, crude_extractors, refiners = stages
+    # maybe in the future wrap everyone so that they could be reduced?
+    # i.e. so that google_extractors return (text, names) and crude_extractors
+    # take (text, names) and does fuzzy_intersect by itself to return consensus names
+    # then you could do something like
+    # big_enough_consensuses = (
+    #   reduce(
+    #       lambda arg, strategy: filter_min_criteria(strategy(arg)),
+    #       strategy_combination,
+    #       initial=text
     #   )
-    #   r1, r2, remove_nonlatin, remove_nonlatin(r1(, ...
-    refined_consensuses: Iterator[Names] = soft_filter(
-        lambda consensus: min_names <= len(consensus) <= max_names,
-        (refine(consensus) for consensus in consensuses for refine in refiners),
+    #   for strategy_combination in product(*stages)
+    #)
+    #however, the overhead of wrapping everything into stages kind of sucks
+    #you could try making it homogenous
+    # Strategy = Callable[[str, Names, Names], Tuple[str, Names, Names]]
+    
+    def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
+        yield from (attempt for attempt in attempts if len(attempt) >= min_names)
+        yield []
+
+    google_extractions: Iterator[Names] = filter_min_criteria(
+        extractor(text) for extractor in google_extractors
     )
-    return next(refined_consensuses)
+    crude_extractions: Iterator[Names] = filter_min_criteria(
+        extractor(text) for extractor in crude_extractors
+    )
+
+    consensuses: Iterator[Names] = filter_min_criteria(
+        fuzzy_intersect(google_extraction, crude_extraction)
+        for google_extraction in google_extractions
+        for crude_extraction in crude_extractions
+    )
+    big_enough_consensuses, fallback = tee(
+        filter_min_criteria(
+            (refine(consensus) for consensus in consensuses for refine in refiners)
+        )
+    )
+    refined_consensuses = (
+        consensus for consensus in big_enough_consensuses if len(consensus) <= max_names
+    )
+    try:
+        return next(refined_consensuses)
+    except StopIteration:
+        return min(fallback, key=len)

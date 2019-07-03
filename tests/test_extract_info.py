@@ -1,6 +1,6 @@
 import re
 import json
-from typing import Dict, List, Any, Tuple, Callable, Sequence
+from typing import Dict, List, Any, Tuple, Callable, Sequence, cast
 import pytest
 import extract_info
 import extract_names
@@ -25,9 +25,9 @@ from tools import ask, fd_print
 #
 # reminder:
 # a stage is made up out of strategies for that stage
-
+STAGES = cast(Sequence[Sequence[Callable]], extract_names.STAGES)
 STAGES_STRATEGY_NAMES: List[List[str]] = [
-    [strategy.__name__ for strategy in step] for step in extract_names.STAGES
+    [strategy.__name__ for strategy in step] for step in STAGES
 ]
 
 metatest_logger = utils.Logger()
@@ -107,18 +107,13 @@ def labeled_example_fixture(request: Any) -> Tuple[Entry, bool]:
 
 def trace_extract_info_nonfixture() -> Tuple[utils.Logger, Callable]:
     logger = utils.Logger()
-
-    def wrap_logging(funcs: Sequence[Callable]) -> Sequence[Callable]:
-        return [logger.logged(func) for func in funcs]
-
-    steps = {
-        "refiners": wrap_logging(extract_names.REFINERS),
-        "crude_extractors": wrap_logging(extract_names.CRUDE_EXTRACTORS),
-        "google_extractors": wrap_logging(extract_names.GOOGLE_EXTRACTORS),
-    }
+    stages = tuple(
+        [logger.logged(strategy) for strategy in stage]
+        for stage in STAGES
+    )
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
-        result = extract_info.extract_info(*args, **steps, **kwargs)  # type: ignore
+        result = extract_info.extract_info(*args, stages=stages, **kwargs)  # type: ignore
         return result
 
     return (logger, traced_extract_info)

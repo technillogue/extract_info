@@ -61,30 +61,6 @@ def compose(f: Any, g: Any) -> Any:  # pylint: disable=function-redefined
     return composed_function
 
 
-def soft_filter(
-    predicate: Callable[[T], bool],
-    seq: Iterator[T],
-    default_if_empty: Union[T, None, List] = None,
-) -> Iterator[T]:
-    """filter, but always returning at least one item.
-    if iter is empty, return default_if_empty
-    otherwise, if none of the items in iter satisfy predicate, return the last
-    item in iter"""
-    if default_if_empty is None:
-        default_if_empty: T = []  # type: ignore
-    last = default_if_empty
-    empty = True
-    while True:
-        try:
-            last = next(seq)
-            if predicate(last):
-                empty = False
-                yield last
-        except StopIteration:
-            if empty:
-                yield last  # type: ignore
-            break
-
 
 class Cache:
     """
