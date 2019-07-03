@@ -1,12 +1,12 @@
 import string
 from itertools import permutations, combinations, filterfalse
-from functools import reduce
-from typing import List, Callable, Iterator, Sequence
+from functools import reduce, wraps
+from typing import List, Callable, Iterator, Sequence, Tuple
 import google_analyze
 from utils import cache, compose, soft_filter
 
 Names = List[str]
-
+NameAttempts = Iterator[Names]
 # general functions
 
 
@@ -19,41 +19,7 @@ def contains_nonlatin(text: str) -> bool:
 
 ## extractors
 
-### "crude" extractors
-
-
-@cache.with_cache
-def nltk_extract_names(text: str) -> Names:
-    "returns names using NLTK Named Entity Recognition, filters out repetition"
-    import nltk
-
-    names = []
-    for sentance in nltk.sent_tokenize(text):
-        for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance))):
-            if isinstance(chunk, nltk.tree.Tree):
-                if chunk.label() == "PERSON":
-                    names.append(" ".join([c[0] for c in chunk]))
-    # remove any names that contain each other
-    for name1, name2 in permutations(names, 2):
-        if name1 in name2:
-            names.remove(name1)
-    return names
-
-
-def all_capitalized_extract_names(text: str) -> List[str]:
-    return [
-        "".join(filter(str.isalpha, word))
-        for word in text.split()
-        if word[0].isupper()
-        and not all(map(str.isupper, word[1:]))  # McCall is a name, but ELISEVER isn't
-    ]
-
-
-Extractors = Sequence[Callable[[str], Names]]
-
-CRUDE_EXTRACTORS: Extractors = [nltk_extract_names, all_capitalized_extract_names]
-
-### google extractor and preprocessors
+#### google extractor and preprocessors
 
 
 @cache.with_cache
@@ -89,12 +55,52 @@ def every_name(text: str) -> str:
     # explore some option for merging adjacent names?
 
 
-GOOGLE_PREPROCESSES: List[Callable[[str], str]] = [only_alpha, no_preprocess, every_name]
-
-GOOGLE_EXTRACTORS: Extractors = [
-    compose(google_extract_names, preprocess)
-    for preprocess in GOOGLE_PREPROCESSES
+GOOGLE_PREPROCESSES: List[Callable[[str], str]] = [
+    only_alpha,
+    no_preprocess,
+    every_name,
 ]
+
+GOOGLE_EXTRACTORS: List[Callable[[str], Tuple[str, Names]]] = [
+    wraps(composed_fn)(lambda text: (text, composed_fn(text)))
+    for composed_fn in [
+        compose(google_extract_names, preprocess) for preprocess in GOOGLE_PREPROCESSES
+    ]
+]
+
+## "crude" extractors
+
+
+@cache.with_cache
+def nltk_extract_names(text: str) -> Names:
+    "returns names using NLTK Named Entity Recognition, filters out repetition"
+    import nltk
+
+    names = []
+    for sentance in nltk.sent_tokenize(text):
+        for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance))):
+            if isinstance(chunk, nltk.tree.Tree):
+                if chunk.label() == "PERSON":
+                    names.append(" ".join([c[0] for c in chunk]))
+    # remove any names that contain each other
+    for name1, name2 in permutations(names, 2):
+        if name1 in name2:
+            names.remove(name1)
+    return names
+
+
+def all_capitalized_extract_names(text: str) -> List[str]:
+    return [
+        "".join(filter(str.isalpha, word))
+        for word in text.split()
+        if word[0].isupper()
+        and not all(map(str.isupper, word[1:]))  # McCall is a name, but ELISEVER isn't
+    ]
+
+
+Extractors = Sequence[Callable[[str], Names]]
+
+CRUDE_EXTRACTORS: Extractors = [nltk_extract_names, all_capitalized_extract_names]
 
 
 ## refiners
@@ -167,8 +173,9 @@ def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments
     refiners: Refiners = REFINERS,
     # TODO: refactor the default arguments into one
 ) -> Names:
-    def min_criteria(names: Names) -> bool:
-        return len(names) >= min_names
+    def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
+        yield from filter(min_names.__le__, attempts)
+        yield []
 
     # does it contain nonlatin?
     google_extractions: Iterator[Names] = soft_filter(
