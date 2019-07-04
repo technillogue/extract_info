@@ -14,7 +14,6 @@ LABELED_EXAMPLES: List[Tuple[Entry, bool]] = [
 ] + [(example, False) for example in COUNTEREXAMPLES]
 
 
-
 def fd_print(text: str, end: str = "\n") -> None:
     with os.fdopen(os.dup(1), "w") as stdout:
         stdout.write(text + end)
@@ -26,8 +25,7 @@ def fd_input(prompt: str) -> str:
         return stdin.readline()
 
 
-def ask(
-    actual: Dict, show_contact_info: bool = False) -> bool:
+def ask(actual: Dict, show_contact_info: bool = False) -> bool:
     fd_print(f"\nLINE: {actual['line']}")
     fd_print(f"NAMES: {actual['names']}")
     if show_contact_info:
@@ -35,10 +33,11 @@ def ask(
         fd_print(f"EMAILS: {actual['emails']}")
     response = fd_input(
         "is the actual result correct? ([y]es/no, default yes) "
-    ).lower()
+    ).lower().strip()
+    fd_print(f"received input {repr(response)}")
     correct = response in ("", "y", "yes")
+    fd_print(f"got {correct}")
     return correct
-
 
 
 def reclassify(actual: Entry, example: Entry) -> bool:
@@ -66,6 +65,7 @@ def reclassify(actual: Entry, example: Entry) -> bool:
         add_to_list.remove(example)
     json.dump(add_to_list + [actual], open(add_to_fname, "w"), indent=4)
     return really_correct
+
 
 def show_all_extractions(text: str) -> Dict[str, List[List[str]]]:
     return {

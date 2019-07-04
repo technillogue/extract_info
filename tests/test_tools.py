@@ -2,7 +2,7 @@
 import json
 import io
 from collections import defaultdict
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 import pytest
 import tools
 
@@ -17,45 +17,54 @@ def sender(monkeypatch: Any) -> Callable[[str], None]:
     return send
 
 
-@pytest.mark.usefixtures("capfd")
-def test_ask(send: Callable) -> None:
+def test_ask(send: Callable, capfd: Any) -> None:
     send("yes")
     assert tools.ask(defaultdict(str))
     send("no")
     assert tools.ask(defaultdict(str)) is False
+    capfd.readouterr()
 
+class Entry(defaultdict):
+    def __init__(self, contents: str) -> None:
+        self.contents = contents
+        super().__init__(lambda: contents)
 
-def entry(arg: str) -> Dict:
-    return defaultdict(lambda: [arg])
+    def __repr__(self) -> str:
+        return f"<Entry {self.contents}>"
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Entry):
+            return self.contents == other.contents
+        return super().__eq__(other)
 
 def test_reclassify(monkeypatch: Any, capfd: Any, send: Callable) -> None:
     monkeypatch.setattr(json, "dump", lambda *dummy, **kwdummy: None)
     monkeypatch.setattr(
         tools, "open", lambda *dummy, **kwdummy: io.StringIO, raising=False
     )
-    monkeypatch.setattr(tools, "EXAMPLES", [entry("correct")])
-    monkeypatch.setattr(tools, "COUNTEREXAMPLES", [entry("incorrect")])
+    example, counterexample = Entry("corrent"), Entry("incorrect")
+    monkeypatch.setattr(tools, "EXAMPLES", [example])
+    monkeypatch.setattr(tools, "COUNTEREXAMPLES", [counterexample])
     cases = [
         (    # we have the wrong output for a correct example
             "no",
-            (entry("wrong"), tools.EXAMPLES[0]),
+            (Entry("wrong"), tools.EXAMPLES[0]),
             ("example: \n", "marking as incorrect", "reclassifying"),
         ),
         ( # counterexample is incorrect but has new output
             "no",
-            (entry("different wrong"), tools.COUNTEREXAMPLES[0]),
+            (Entry("different wrong"), tools.COUNTEREXAMPLES[0]),
             ("counterexample: \n", "marking as incorrect", "updating example")
         ),
         (# an incorrect example has no generated correct output
             "yes",
-            (entry("newly correct"), tools.COUNTEREXAMPLES[0]), 
+            (Entry("newly correct"), tools.COUNTEREXAMPLES[0]), 
             ("counterexample: \n", "marking as correct", "reclassifying")
         )
     ]
     for response, (actual_entry, expected_entry), correct_response  in cases:
-        monkeypatch.setattr(tools, "EXAMPLES", [entry("correct")])
-        monkeypatch.setattr(tools, "COUNTEREXAMPLES", [entry("incorrect")])
+        monkeypatch.setattr(tools, "EXAMPLES", [example])
+        monkeypatch.setattr(tools, "COUNTEREXAMPLES", [counterexample])
         send(response)
         tools.reclassify(actual_entry, expected_entry)
         out = capfd.readouterr().out

@@ -1,5 +1,4 @@
 import re
-import json
 from typing import Dict, List, Any, Tuple, Callable, Sequence
 import pytest
 import extract_info
@@ -160,11 +159,11 @@ def test_examples(
         raise e
     if actual != example:
         really_correct = reclassify(actual, example)
-        if really_correct:
+        if not really_correct:
             if correct:
                 assert actual == example
             else:
-                raise XFailed("output still the same as known wrong output")
+                raise pytest.xfail("output still the same as known wrong output")
     # could try reclassifying everything in case something is falsely
     # marked as wrong
 
