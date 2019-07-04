@@ -116,9 +116,15 @@ class Logger:
 
     def logged(self, fn: Callable) -> Callable:
         @functools.wraps(fn)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            self.log.debug(fn.__name__)
-            return fn(*args, **kwargs)
+        def wrapper(
+            *args: Any,
+            _fn: Callable = fn,
+            _log: logging.Logger = self.log,
+            _name: str = fn.__name__,
+            **kwargs: Any
+        ) -> Any:
+            _log.debug(_name)
+            return _fn(*args, **kwargs)
 
         return wrapper
 

@@ -66,7 +66,7 @@ def google_extract_names(text: str) -> Names:
     return google_analyze.extract_entities(latin_text)
     # TO DO: merge adjacent names
 
-
+# use lru here? currently compose strips this cache
 @cache.with_cache
 def only_alpha(text: str) -> str:
     "remove words that don't have any alphabetical chareceters or -"
@@ -75,6 +75,7 @@ def only_alpha(text: str) -> str:
             word
             for word in text.split()
             if all(c.isalpha() or c in r"-/\$%(),.:;?!" for c in word)
+            # relatively bad, 0.8s tottime
         ]
     )
 
