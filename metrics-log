@@ -106,12 +106,27 @@
 # 4.142 seconds with a complete cache
 # could speed up significantly 1
 
-# composed_functions are cached. different __wrapped__ renaming.
+# composed_functions are cached. 
 # black formatting, extensive linting, type fiddling
-# completely refactored regex test, refactored test_cases 
+# compose uses __wrapped__ instead of no_cache=True
+# completely refactored regex test; strategies instead of methods
 # refactored extract_info in min_max_contents
 # all_capitalized_extract_names excludes all caps
-# added reclassification and cleaned up
-# refactored stages and removed soft_filter
+
+
+# Refiners and Extractors are Lists
+# Logger returns log [tests]
+# fiddled with types for refiner generator
+# added LABELED_CASES [tests]
+# merge test cases, replaced "case" with "example" [tests]
+# stages instead of steps, refactored regex_gen [tests]
+# added reclassification [tests]
+# refactored stages, removed soft_filter [MAIN]
+# extensive linting [MAIN]
+# refactored test_cases, refactored tests/tools, added tool_tests [tests, some main]
+# fixed reclassify bug [tests]
+# tweaked reporting [main], cleaned classification and added examples[tests]
 # correct: 90.95%, not enough: 90.05%, too many: 0.00%
 
+# logging locals into private, printing bug [tests]
+# explicit remove_none instead of lambda, test tweaking
