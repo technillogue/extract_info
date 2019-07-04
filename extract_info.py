@@ -75,7 +75,7 @@ def extract_info(
             "flags": ["skipped"]
             if not max_names
             else [
-                "one contact" if max_names == 1 else "multiple names",
+                ("one contact" if max_names == 1 else "multiple names"),
                 decide_exit_type(names, min_names, max_names),
                 "all",
             ]
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         print(
             ", ".join(
                 "{}: {:.2%}".format(category, counts[category] / counts["all"])
-                for category in ("correct", "not enough", "too many")
+                for category in ("correct", "not enough", "too many", "multiple contacts")
             )
         )
         # padding

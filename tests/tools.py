@@ -1,7 +1,7 @@
 import json
 import random
 import os
-from typing import Dict, List, Iterable, Tuple, Optional
+from typing import Dict, List, Iterable, Tuple
 import extract_names
 
 Entry = Dict[str, List[str]]
@@ -26,17 +26,11 @@ def fd_input(prompt: str) -> str:
 
 
 def ask(actual: Dict, show_contact_info: bool = False) -> bool:
-    fd_print(f"\nLINE: {actual['line']}")
-    fd_print(f"NAMES: {actual['names']}")
+    fd_print("\nLINE: {line}\nNAMES: {names}\n".format(**actual))
     if show_contact_info:
-        fd_print(f"PHONES: {actual['phones']}")
-        fd_print(f"EMAILS: {actual['emails']}")
-    response = fd_input(
-        "is the actual result correct? ([y]es/no, default yes) "
-    ).lower().strip()
-    fd_print(f"received input {repr(response)}")
+        fd_print("\nPHONES: {phones}\nEMAILS: {emails}".format(**actual))
+    response = fd_input("is that correct? ([y]es/no, default yes) ").lower().strip()
     correct = response in ("", "y", "yes")
-    fd_print(f"got {correct}")
     return correct
 
 
@@ -67,75 +61,35 @@ def reclassify(actual: Entry, example: Entry) -> bool:
     return really_correct
 
 
-def show_all_extractions(text: str) -> Dict[str, List[List[str]]]:
-    return {
-        "google_extractions": [
-            extractor(text) for extractor in extract_names.GOOGLE_EXTRACTORS
-        ],
-        "crude_extractions": [
-            extractor(text) for extractor in extract_names.CRUDE_EXTRACTORS
-        ],
-    }
-
-    # consensuses: Iterator[Names] = filter(
-    #     min_criteria,
-    #     map(fuzzy_intersect, product(google_extractions, crude_extractions))
-    # )
-    # refined_consensuses: Iterator[Names] = soft_filter(
-    #     lambda consensus: min_names <= len(consensus) <= max_names,
-    #     (
-    #         refine(consensus)
-    #         for consensus, refine in product(consensuses, REFINERS)
-    #     )
-    # )
+def show_all_extractions(text: str) -> List[List[List[str]]]:
+    return [
+        [extractor(text) for extractor in extractors]
+        for extractors in extract_names.STAGES[:2]
+    ]
 
 
 def classify_examples(
-    entries: List[Entry],
-    n: int,
-    show_contact_info: bool,
-    known_correct: List[Entry],
-    known_incorrect: List[Entry],
+    entries: List[Entry], n: int, show_contact_info: bool = False
 ) -> Iterable[Tuple[bool, Entry]]:
     random.shuffle(entries)
     classified = 0
     while classified < n and entries:
         entry = entries.pop()
-        if entry not in known_correct and entry not in known_incorrect:
+        if entry not in EXAMPLES and entry not in COUNTEREXAMPLES:
             correctness = ask(entry, show_contact_info)
             classified += 1
             yield (correctness, entry)
 
 
-def save_examples(
-    entries: List[Entry],
-    n: int,
-    show_contact_info: bool = False,
-    known_correct: Optional[List[Entry]] = None,
-    known_incorrect: Optional[List[Entry]] = None,
-) -> None:
-    if known_correct is None:
-        known_correct = json.load(open("data/correct_cases.json", encoding="utf-8"))
-    if known_incorrect is None:
-        known_incorrect = json.load(open("data/incorrect_cases.json", encoding="utf-8"))
-    examples: List[Tuple[bool, Entry]] = list(
-        classify_examples(entries, n, show_contact_info, known_correct, known_incorrect)
-    )
-    correct: List[Entry]
-    incorrect: List[Entry]
-    correct, incorrect = (
-        [example for (type_, example) in examples if type_ == selected_type]
-        for selected_type in (True, False)
-    )
+def save_examples(entries: List[Entry], n: int) -> None:
+    examples: List[Tuple[bool, Entry]] = list(classify_examples(entries, n))
+    correct: List[Entry] = [
+        example for (correctness, example) in examples if correctness
+    ]
+    incorrect: List[Entry] = [
+        example for (correctness, example) in examples if not correctness
+    ]
     assert len(correct) + len(incorrect) == len(examples)
-    json.dump(
-        known_correct + correct,
-        open("data/correct_cases.json", "w", encoding="utf-8"),
-        indent=4,
-    )
-    json.dump(
-        known_incorrect + incorrect,
-        open("data/incorrect_cases.json", "w", encoding="utf-8"),
-        indent=4,
-    )
+    json.dump(EXAMPLES + correct, open(EXAMPLES_FNAME, "w"), indent=4)
+    json.dump(COUNTEREXAMPLES + incorrect, open(COUNTEREXAMPLES_FNAME, "w"), indent=4)
     print(f"saved {len(correct)} correct, {len(incorrect)} incorrect examples")

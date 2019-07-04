@@ -105,3 +105,13 @@
 # 1055 seconds to regenerate the entire cache
 # 4.142 seconds with a complete cache
 # could speed up significantly 1
+
+# composed_functions are cached. different __wrapped__ renaming.
+# black formatting, extensive linting, type fiddling
+# completely refactored regex test, refactored test_cases 
+# refactored extract_info in min_max_contents
+# all_capitalized_extract_names excludes all caps
+# added reclassification and cleaned up
+# refactored stages and removed soft_filter
+# correct: 90.95%, not enough: 90.05%, too many: 0.00%
+
