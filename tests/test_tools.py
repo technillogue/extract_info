@@ -1,12 +1,22 @@
 # mypy: disallow_untyped_decorators=False
 import json
 import io
-from collections import defaultdict
 from typing import Any, Callable
 import pytest
 import tools
 
-# elephants all the way down
+class Entry(dict):
+    def __init__(self, contents: str) -> None:
+        self.contents = contents
+        self["names"] = self["line"] = self["phones"] = self["emails"] = [contents]
+
+    def __repr__(self) -> str:
+        return f"<Entry {self.contents}>"
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Entry):
+            return self.contents == other.contents
+        return super().__eq__(other)# elephants all the way down
 
 
 @pytest.fixture(name="send")
@@ -19,23 +29,12 @@ def sender(monkeypatch: Any) -> Callable[[str], None]:
 
 def test_ask(send: Callable, capfd: Any) -> None:
     send("yes")
-    assert tools.ask(defaultdict(str))
+    assert tools.ask(Entry("foo"))
     send("no")
-    assert tools.ask(defaultdict(str)) is False
+    assert tools.ask(Entry("bar")) is False
     capfd.readouterr()
 
-class Entry(defaultdict):
-    def __init__(self, contents: str) -> None:
-        self.contents = contents
-        super().__init__(lambda: contents)
 
-    def __repr__(self) -> str:
-        return f"<Entry {self.contents}>"
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, Entry):
-            return self.contents == other.contents
-        return super().__eq__(other)
 
 def test_reclassify(monkeypatch: Any, capfd: Any, send: Callable) -> None:
     monkeypatch.setattr(json, "dump", lambda *dummy, **kwdummy: None)
