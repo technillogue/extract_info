@@ -112,7 +112,7 @@
 # completely refactored regex test; strategies instead of methods
 # refactored extract_info in min_max_contents
 # all_capitalized_extract_names excludes all caps
-
+correct: 90.95%, not enough: 5.35%, too many: 3.70% [retroactive]
 
 # Refiners and Extractors are Lists
 # Logger returns log [tests]
@@ -121,7 +121,9 @@
 # merge test cases, replaced "case" with "example" [tests]
 # stages instead of steps, refactored regex_gen [tests]
 # added reclassification [tests]
+correct: 90.95%, not enough: 5.35%, too many: 3.70% [retroactive]
 # refactored stages, removed soft_filter [MAIN]
+correct: 90.95%, not enough: 9.05%, too many: 0.00% [retroactive]
 # extensive linting [MAIN]
 # refactored test_cases, refactored tests/tools, added tool_tests [tests, some main]
 # fixed reclassify bug [tests]
