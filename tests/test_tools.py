@@ -5,10 +5,11 @@ from typing import Any, Callable
 import pytest
 import tools
 
+
 class Entry(dict):
     def __init__(self, contents: str) -> None:
         self.contents = contents
-        self["names"] = self["line"] = self["phones"] = self["emails"] = [contents]
+        super().__init__(names=[contents], line=[contents])
 
     def __repr__(self) -> str:
         return f"<Entry {self.contents}>"
@@ -16,7 +17,7 @@ class Entry(dict):
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, Entry):
             return self.contents == other.contents
-        return super().__eq__(other)# elephants all the way down
+        return super().__eq__(other)  # elephants all the way down
 
 
 @pytest.fixture(name="send")
@@ -35,7 +36,6 @@ def test_ask(send: Callable, capfd: Any) -> None:
     capfd.readouterr()
 
 
-
 def test_reclassify(monkeypatch: Any, capfd: Any, send: Callable) -> None:
     monkeypatch.setattr(json, "dump", lambda *dummy, **kwdummy: None)
     monkeypatch.setattr(
@@ -45,23 +45,23 @@ def test_reclassify(monkeypatch: Any, capfd: Any, send: Callable) -> None:
     monkeypatch.setattr(tools, "EXAMPLES", [example])
     monkeypatch.setattr(tools, "COUNTEREXAMPLES", [counterexample])
     cases = [
-        (    # we have the wrong output for a correct example
+        (  # we have the wrong output for a correct example
             "no",
             (Entry("wrong"), tools.EXAMPLES[0]),
             ("example: \n", "marking as incorrect", "reclassifying"),
         ),
-        ( # counterexample is incorrect but has new output
+        (  # counterexample is incorrect but has new output
             "no",
             (Entry("different wrong"), tools.COUNTEREXAMPLES[0]),
-            ("counterexample: \n", "marking as incorrect", "updating example")
+            ("counterexample: \n", "marking as incorrect", "updating example"),
         ),
-        (# an incorrect example has no generated correct output
+        (  # an incorrect example has no generated correct output
             "yes",
-            (Entry("newly correct"), tools.COUNTEREXAMPLES[0]), 
-            ("counterexample: \n", "marking as correct", "reclassifying")
-        )
+            (Entry("newly correct"), tools.COUNTEREXAMPLES[0]),
+            ("counterexample: \n", "marking as correct", "reclassifying"),
+        ),
     ]
-    for response, (actual_entry, expected_entry), correct_response  in cases:
+    for response, (actual_entry, expected_entry), correct_response in cases:
         monkeypatch.setattr(tools, "EXAMPLES", [example])
         monkeypatch.setattr(tools, "COUNTEREXAMPLES", [counterexample])
         send(response)
