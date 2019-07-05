@@ -6,12 +6,10 @@ import itertools
 import argparse
 from enum import Enum
 from typing import List, Dict, Tuple, Any
+from phonenumbers import PhoneNumberMatcher, format_number, PhoneNumberFormat
 from extract_names import extract_names
 from utils import cache
-# requires python3.6+
 
-Names = List[str]
-Entry = Dict[str, Names]
 
 class Flags(str, Enum):
     correct = "correct"
@@ -26,25 +24,15 @@ class Flags(str, Enum):
         return self.value
 
 
-PHONE_RE = re.compile(
-    r"(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})"
-)
 EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+")
+
+Names = List[str]
+Entry = Dict[str, Names]
 
 
 def space_dashes(text: str) -> str:
     "Put spaces around dashes without spaces."
     return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
-
-
-def extract_phones(text: str) -> List[str]:
-    phone_numbers = [re.sub(r"\D", "", number) for number in PHONE_RE.findall(text)]
-    # removes duplicates while preserving order, only works correctly in python3.6+
-    return list(dict.fromkeys(phone_numbers))
-
-
-def extract_emails(text: str) -> List[str]:
-    return EMAIL_RE.findall(text)
 
 
 def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
@@ -70,8 +58,11 @@ def extract_info(
     raw_line: str, flags: bool = False, **extract_names_kwargs: Any
 ) -> Dict[str, List[str]]:
     line: str = raw_line.replace("'", "").replace("\n", "")
-    emails: List[str] = extract_emails(line)
-    phones: List[str] = extract_phones(line)
+    emails: List[str] = EMAIL_RE.findall(line)
+    phones: List[str] = [
+        format_number(match.number, PhoneNumberFormat.INTERNATIONAL)
+        for match in PhoneNumberMatcher(line, "US")
+    ]
     min_names, max_names = min_max_names(emails, phones)
     names: List[str]
     if max_names == 0:
@@ -126,4 +117,4 @@ def main() -> Dict:
 
 
 if __name__ == "__main__":
-    debugging = main() 
+    debugging = main()

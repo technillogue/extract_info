@@ -35,7 +35,7 @@ def test_fuzzy_intersect() -> None:
         assert extract_names.fuzzy_intersect(left, right) == expected
 
 
-LINE = "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited"
+LINE = "12/31 -- Lisa balloon drop -- off 617.555.5555 - paid, check deposited"
 
 
 @pytest.mark.usefixtures("save_cache")

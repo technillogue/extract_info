@@ -13,6 +13,7 @@ LABELED_EXAMPLES: List[Tuple[Entry, bool]] = [
     (example, True) for example in EXAMPLES
 ] + [(example, False) for example in COUNTEREXAMPLES]
 
+assert EXAMPLES and COUNTEREXAMPLES
 
 def fd_print(text: str, end: str = "\n") -> None:
     with os.fdopen(os.dup(1), "w") as stdout:
