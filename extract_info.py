@@ -10,6 +10,8 @@ from extract_names import extract_names
 from utils import cache
 # requires python3.6+
 
+Names = List[str]
+Entry = Dict[str, Names]
 
 class Flags(str, Enum):
     correct = "correct"
@@ -31,20 +33,17 @@ EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+")
 
 
 def space_dashes(text: str) -> str:
-    "put spaces around dashes without spaces"
+    "Put spaces around dashes without spaces."
     return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
 
 def extract_phones(text: str) -> List[str]:
-    "returns phone numbers in text"
     phone_numbers = [re.sub(r"\D", "", number) for number in PHONE_RE.findall(text)]
-    # removes duplicates while preserving order, only works correctly in
-    # python3.6+
+    # removes duplicates while preserving order, only works correctly in python3.6+
     return list(dict.fromkeys(phone_numbers))
 
 
 def extract_emails(text: str) -> List[str]:
-    "returns emails in text"
     return EMAIL_RE.findall(text)
 
 
@@ -54,6 +53,7 @@ def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
     # but if there's 0 email and 1 phone, it should be 1, not 0
     min_names: int = max(1, min(contact_counts))
     max_names: int = sum(contact_counts)
+    # maybe add min, likely_max, absolute_max to distingish max vs sum?
     return (min_names, max_names)
 
 
@@ -77,48 +77,40 @@ def extract_info(
     if max_names == 0:
         names = ["skipped"]
     else:
-        names = extract_names(
-            space_dashes(line), min_names, max_names, **extract_names_kwargs
-        )
+        clean_line = space_dashes(line)
+        names = extract_names(clean_line, min_names, max_names, **extract_names_kwargs)
     print(".", end="")
     sys.stdout.flush()
     result = {"line": [line], "emails": emails, "phones": phones, "names": names}
     if flags:
-        return {
-            **result,
-            "flags": [Flags.skipped]
-            if not max_names
-            else [
-                (Flags.one_contact if min_names == 1 else Flags.multiple_contacts),
-                decide_exit_type(names, min_names, max_names),
-                Flags.all,
-            ],
-        }
+        if not max_names:
+            result["flags"] = [Flags.skipped]
+            return result
+        result["flags"] = [
+            (Flags.one_contact if min_names == 1 else Flags.multiple_contacts),
+            decide_exit_type(names, min_names, max_names),
+            Flags.all,
+        ]
     return result
 
 
-if __name__ == "__main__":
+def main() -> Dict:
     parser = argparse.ArgumentParser("extract names and contact info from csv")
-    # parser.add_argument("-p", "--preprocess", action="store_true")
     parser.add_argument("-c", "--clear", action="store_true")
     parser.add_argument("-d", "--debug", action="store_true")
     args = parser.parse_args()
     if args.clear:
         cache.clear_cache("extract_info")
+    lines = list(csv.reader(open("data/trello.csv", encoding="utf-8")))[1:]
     with cache:
-        lines = list(csv.reader(open("data/trello.csv", encoding="utf-8")))[1:]
         entries = [extract_info(line[0], flags=True) for line in lines]
         entry_types = {
             flag: [entry for entry in entries if flag in entry["flags"]]
             for flag in Flags
         }
         counts = dict(zip(entry_types.keys(), map(len, entry_types.values())))
-        print(
-            ", ".join(
-                "{}: {:.2%}".format(flag, counts[flag] / counts[Flags.all])
-                for flag in list(Flags)[:4]
-            )
-        )
+        for flag in list(Flags)[:4]:
+            print("{}: {:.2%}. ".format(flag, counts[flag] / counts[Flags.all]), end="")
         # padding
         header = ["line", "emails", "phones", "names"]
         rows = [
@@ -132,3 +124,8 @@ if __name__ == "__main__":
             writer = csv.writer(f)
             writer.writerow(header)
             writer.writerows(rows)
+        return locals()
+
+
+if __name__ == "__main__":
+    debugging = main() 
