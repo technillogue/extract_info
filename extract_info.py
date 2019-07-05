@@ -75,7 +75,7 @@ def extract_info(
             "flags": ["skipped"]
             if not max_names
             else [
-                ("one contact" if max_names == 1 else "multiple names"),
+                ("one contact" if max_names == 1 else "multiple contacts"),
                 decide_exit_type(names, min_names, max_names),
                 "all",
             ]
