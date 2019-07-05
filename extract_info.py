@@ -12,8 +12,8 @@ from utils import cache
 
 
 class Flags(str, Enum):
-    too_many = "too many"
     correct = "correct"
+    too_many = "too many"
     not_enough = "not enough"
     multiple_contacts = "multiple contacts"
     one_contact = "one_contact"
@@ -89,7 +89,7 @@ def extract_info(
             "flags": [Flags.skipped]
             if not max_names
             else [
-                (Flags.one_contact if min_names == 1 else Flags.one_contact),
+                (Flags.one_contact if min_names == 1 else Flags.multiple_contacts),
                 decide_exit_type(names, min_names, max_names),
                 Flags.all,
             ],
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         print(
             ", ".join(
                 "{}: {:.2%}".format(flag, counts[flag] / counts[Flags.all])
-                for flag in Flags
+                for flag in list(Flags)[:4]
             )
         )
         # padding

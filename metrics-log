@@ -130,5 +130,18 @@ correct: 90.95%, not enough: 9.05%, too many: 0.00% [retroactive]
 # tweaked reporting [main], cleaned classification and added examples[tests]
 # correct: 90.95%, not enough: 90.05%, too many: 0.00%
 
-# logging locals into private, printing bug [tests]
+# logging locals into private, printing bug, super().__init__ for test Entry [tests]
 # explicit remove_none instead of lambda, test tweaking
+
+# fixed actual overrefing
+# fixed a flag name bug, 
+# replaced test_last with save_cache fixture in testconf. test_too_many
+# linting and cleaning
+# correct: 90.95%, not enough: 4.94%, too many: 0.00%, multiple contacts: 68.72%
+
+# switched to flag enum, multiple_contacts decided by min_contact
+# too many: 4.12%, correct: 90.95%, not enough: 4.94%, multiple contacts: 0.00%, one_contact: 100.00%, all: 100.00%, skipped: 23.46%
+
+# formatting
+# tweak reporting, correct flag setting
+# correct: 90.95%, too many: 4.12%, not enough: 4.94%, multiple contacts: 0.21%
