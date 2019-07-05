@@ -1,4 +1,7 @@
+from typing import Any, List
+import pytest
 import extract_names
+import extract_info
 
 
 def test_contains_nonlatin() -> None:
@@ -15,18 +18,30 @@ def test_every_name() -> None:
     )
 
 
+LINE = "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited"
+
+
+@pytest.mark.usefixtures("save_cache")
 def test_no_google() -> None:
-    actual = extract_names.extract_names(
-        "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited", 1, 1
-    )
+    actual = extract_names.extract_names(LINE, 1, 1)
     expected = ["Lisa"]
     if actual != expected:
         breakpoint()
-        extract_names.extract_names(
-            "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited",
-            1,
-            1,
-        )
-    else:
-        extract_names.cache.save_cache()
+        extract_names.extract_names(LINE, 1, 1)
     assert actual == expected
+
+@pytest.mark.usefixtures("save_cache")
+def test_too_many(monkeypatch: Any) -> None:
+    def mock_fuzzy_intersect(*_dummy: Any) -> List[str]:
+        return ["Stephanie", "red", "Собака", "Ariel", "Lisa"]
+
+    monkeypatch.setattr(extract_names, "fuzzy_intersect", mock_fuzzy_intersect)
+    try:
+        actual = extract_names.extract_names(LINE, 1, 1)
+        assert actual  # return the best attempt, not nothing
+        assert actual == ["Stephanie", "Ariel", "Lisa"]
+        assert "too much" in extract_info.extract_info(LINE, flags=True)["flags"]
+    except AssertionError:
+        breakpoint()
+        actual = extract_names.extract_names(LINE, 1, 1)
+        assert 0
