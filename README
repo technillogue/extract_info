@@ -1,0 +1,13 @@
+Extract names and contact information from bilingual, ungrammatical sentence fragments.
+
+Motivating use case: advertising to clients who are similar to past clients on Facebook is easier and more effective than developping your own targetting, but requires you to have your client's contact info. This tool allows you to do that with unstructured records.
+
+Features:
+- Clean, mostly functional code with comprehensive type annotations and integration testing
+- Infers needed number of names in each line based on number of emails and phone numbers (if you have multiple contact people per sale). >90% accurate by this metric.
+- Tries to find a consensus between Google Cloud Natural Language Processing Named Entity Recognition (which has fewer false positives, but only works well for English) and NLTK.ne_chunk (which usually works, but has more false positives)
+- Caches expensive/slow Google and NLTK calls between runs, but keeps cache files small even with long record entries
+- Combinatorially tries various pre- and post- processing strategies
+- Careful metaprograming makes it trivial to add more NER algorithims or pre-/post- processors 
+- Includes a feature for labeling data for test cases, and updating labels mid-test if desired
+- Because the algorithim to try combinations of strategies corresponds to a finate state machine, it's possible to generate a regex that will match the correct sequence of strategies to be tried. The tests trace which the order in which strategies are called, and use this to check not only that the result is correct, but also that the strategies were tried in the right order.
