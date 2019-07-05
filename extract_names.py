@@ -1,5 +1,5 @@
 import string
-from itertools import permutations, combinations, filterfalse, tee
+from itertools import permutations, combinations, filterfalse, tee, groupby
 from functools import reduce
 from typing import List, Callable, Iterator, Sequence, Tuple
 import google_analyze
@@ -8,6 +8,23 @@ from utils import cache, compose
 Names = List[str]
 NameAttempts = Iterator[Names]
 # general functions
+
+# use lru here? currently compose strips this cache
+@cache.with_cache
+def only_alpha(text: str) -> str:
+    "remove words that don't have any alphabetical chareceters or -"
+    return " ".join(
+        [
+            word
+            for word in text.split()
+            if all(c.isalpha() or c in r"-/\$%(),.:;?!" for c in word)
+            # relatively bad, 0.8s tottime
+        ]
+    )
+
+
+def similar(name: str, other_name: str) -> bool:
+    return name in other_name or other_name in name
 
 
 def contains_nonlatin(text: str) -> bool:
@@ -18,6 +35,27 @@ def contains_nonlatin(text: str) -> bool:
 # combinatorial functions
 ## extractors
 ### "crude" extractors
+
+
+def merge_adjacent(text: str, names: Names) -> Names:
+    """
+    >>> merge_adjacent("I, Doctor Seuss, saw Sylvia Plath", ["Leonard", "Cohen",
+    "Sylvia", "Plath"])
+    ["Leonard Cohen", "Sylvia Plath"]
+    """
+    clean_words = ["".join(filter(str.isalpha, word.lower())) for word in text.split()]
+    clean_names = ["".join(filter(str.isalpha, name.lower())) for name in names]
+    split_names = set(name_word for name in clean_names for name_word in name.split())
+    name_indexes = sorted([clean_words.index(name) for name in split_names])
+    # e.g. [1, 2, 4, 5] for the docstring example. adjacent words have consequtive
+    # indexes and therefore the offset from the enumeration
+    breakpoint()
+    return [
+        " ".join(clean_words[index].capitalize() for _enumerator, index in group)
+        for _key, group in groupby(
+            enumerate(name_indexes), lambda index_pair: index_pair[1] - index_pair[0]
+        )
+    ]
 
 
 @cache.with_cache
@@ -65,20 +103,6 @@ def google_extract_names(text: str) -> Names:
     # TO DO: merge adjacent names
 
 
-# use lru here? currently compose strips this cache
-@cache.with_cache
-def only_alpha(text: str) -> str:
-    "remove words that don't have any alphabetical chareceters or -"
-    return " ".join(
-        [
-            word
-            for word in text.split()
-            if all(c.isalpha() or c in r"-/\$%(),.:;?!" for c in word)
-            # relatively bad, 0.8s tottime
-        ]
-    )
-
-
 def no_preprocess(text: str) -> str:
     return text
 
@@ -100,32 +124,16 @@ GOOGLE_EXTRACTORS: Extractors = [
 ]
 
 
-def partition_similar(name: str, other_names: Names) -> Tuple[Names, Names]:
-    def similar_to(other_name: str) -> bool:
-        return name in other_name or other_name in name
-        #any(part in name for part in other_name.split())
-
-    return (
-        list(filter(similar_to, other_names)),
-        list(filterfalse(similar_to, other_names)),
-    )
-
-
-def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names:
-    if not recursive:
-        if not (left and right):
-            return left or right
-    else:
-        if not left:
-            return []
-    first_left, *remaining_left = left
-    similar_right, dissimilar_right = partition_similar(first_left, right)
-    if similar_right:
-        similar_left, dissimilar_left = partition_similar(first_left, remaining_left)
-        return [max(first_left, *similar_left, *similar_right, key=len)] + fuzzy_intersect(
-            dissimilar_left, dissimilar_right, True
-        )
-    return fuzzy_intersect(remaining_left, right, True)
+def fuzzy_intersect(left_names: Names, right_names: Names) -> Names:
+    if not (left_names and right_names):
+        return left_names or right_names
+    intersect = [
+        max(left_name, right_name, key=len)
+        for left_name in left_names
+        for right_name in right_names
+        if similar(left_name, right_name)
+    ]
+    return intersect
 
 
 def remove_none(names: Names) -> Names:
