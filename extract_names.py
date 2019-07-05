@@ -16,16 +16,14 @@ def contains_nonlatin(text: str) -> bool:
 
 
 # combinatorial functions
-
 ## extractors
-
 ### "crude" extractors
-
 
 @cache.with_cache
 def nltk_extract_names(text: str) -> Names:
     "returns names using NLTK Named Entity Recognition, filters out repetition"
     import nltk
+
     names = []
     for sentance in nltk.sent_tokenize(text):
         for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance))):
@@ -43,8 +41,7 @@ def all_capitalized_extract_names(text: str) -> List[str]:
     return [
         "".join(filter(str.isalpha, word))
         for word in text.split()
-        if word[0].isupper()
-        and not all(map(str.isupper, word[1:]))
+        if word[0].isupper() and not all(map(str.isupper, word[1:]))
         # McCall is a name, but ELISEVER isn't
     ]
 
@@ -65,6 +62,7 @@ def google_extract_names(text: str) -> Names:
     latin_text = "".join(filter(string.printable.__contains__, text))
     return google_analyze.extract_entities(latin_text)
     # TO DO: merge adjacent names
+
 
 # use lru here? currently compose strips this cache
 @cache.with_cache
@@ -117,8 +115,10 @@ def fuzzy_intersect(google_names: Names, crude_names: Names) -> Names:
                     intersect.append(crude_name)
     return intersect
 
+
 def remove_none(names: Names) -> Names:
     return names
+
 
 @cache.with_cache
 def remove_synonyms(names: Names) -> Names:

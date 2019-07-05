@@ -124,6 +124,7 @@ def generate_trace_tester() -> Callable[[Entry, str], None]:
 
     return trace_tester
 
+
 @pytest.fixture(name="traced_extract_info")
 def trace_extract_info() -> Callable:
     logger = utils.Logger()
@@ -140,8 +141,9 @@ def trace_extract_info() -> Callable:
 
 
 @pytest.fixture(name="labeled_example", params=LABELED_EXAMPLES)
-def labeled_example_fixture(request) -> Entry:
+def labeled_example_fixture(request: Any) -> Entry:
     return request.param
+
 
 @pytest.mark.usefixtures("save_cache")
 def test_examples(
@@ -162,4 +164,3 @@ def test_examples(
                 raise pytest.xfail("output still the same as known wrong output")
     # could try reclassifying everything in case something is falsely
     # marked as wrong
-

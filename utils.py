@@ -29,7 +29,9 @@ def compose(f: Callable[[Y], Z], g: Callable[[X], Y]) -> Callable[[X], Z]:
     def composed_function(arg: X) -> Z:
         return f(g(arg))
 
-    composed_function.__name__ = composed_function.__qualname__ = "_".join((f.__name__, g.__name__))
+    composed_function.__name__ = composed_function.__qualname__ = "_".join(
+        (f.__name__, g.__name__)
+    )
     if use_cache:
         return cache.with_cache(composed_function)
     return composed_function

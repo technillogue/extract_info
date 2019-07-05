@@ -125,9 +125,8 @@ if __name__ == "__main__":
         rows = [
             list(triple)
             for entry in entries
-            for triple in itertools.zip_longest(  
-                *[entry[heading] for heading in header],
-                fillvalue=""
+            for triple in itertools.zip_longest(
+                *[entry[heading] for heading in header], fillvalue=""
             )
         ]
         with open("data/info.csv", "w", encoding="utf-8") as f:
