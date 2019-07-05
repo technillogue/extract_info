@@ -183,7 +183,6 @@ def extract_names(
     # however, the overhead of wrapping everything into stages kind of sucks
     # you could try making it homogenous
     # Strategy = Callable[[str, Names, Names], Tuple[str, Names, Names]]
-
     def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
         yield from (attempt for attempt in attempts if len(attempt) >= min_names)
         yield []
@@ -194,21 +193,24 @@ def extract_names(
     crude_extractions: Iterator[Names] = filter_min_criteria(
         extractor(text) for extractor in crude_extractors
     )
-
     consensuses: Iterator[Names] = filter_min_criteria(
         fuzzy_intersect(google_extraction, crude_extraction)
         for google_extraction in google_extractions
         for crude_extraction in crude_extractions
     )
-    big_enough_consensuses, fallback = tee(
-        filter_min_criteria(
-            (refine(consensus) for consensus in consensuses for refine in refiners)
-        )
-    )
-    refined_consensuses = (
-        consensus for consensus in big_enough_consensuses if len(consensus) <= max_names
+    refinements, fallback = tee(
+        refine(consensus) for consensus in consensuses for refine in refiners
     )
     try:
-        return next(refined_consensuses)
+        return next(
+            refinement
+            for refinement in refinements
+            if min_names <= len(refinement) <= max_names
+        )
     except StopIteration:
-        return min(fallback, key=len)
+        every_refinement = list(fallback)  # note: this has a bunch of [] at the end
+        if max(map(len, every_refinement)) < min_names:
+            return max(every_refinement, key=len)
+        return min(
+            filter(None, every_refinement), key=len, default=list()
+        )  # smallest non-empty but [] if they're all empty
