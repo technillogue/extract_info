@@ -1,3 +1,4 @@
+# mypy: disallow_untyped_decorators=False
 from typing import Any, List
 import pytest
 import extract_names

@@ -140,7 +140,7 @@ def trace_extract_info() -> Callable:
 
 
 @pytest.fixture(name="labeled_example", params=LABELED_EXAMPLES)
-def labeled_example_fixture(request):
+def labeled_example_fixture(request) -> Entry:
     return request.param
 
 @pytest.mark.usefixtures("save_cache")

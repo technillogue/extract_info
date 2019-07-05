@@ -149,7 +149,7 @@ UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
 
 
 REFINERS: Refiners = [remove_none] + [
-    reduce(compose, combination)
+    reduce(compose, combination)  # type: ignore # overly specific inferred signature
     for i in range(1, len(UNIQUE_REFINERS))
     for combination in combinations(UNIQUE_REFINERS, i)
 ]

@@ -1,8 +1,9 @@
 # mypy: disallow_untyped_decorators=False
-from utils import cache
+from typing import Iterator
 import pytest
+from utils import cache
 
 @pytest.fixture
-def save_cache() -> None:
+def save_cache() -> Iterator[None]:
     yield
     cache.save_cache()
