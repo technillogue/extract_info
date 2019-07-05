@@ -19,6 +19,7 @@ def contains_nonlatin(text: str) -> bool:
 ## extractors
 ### "crude" extractors
 
+
 @cache.with_cache
 def nltk_extract_names(text: str) -> Names:
     "returns names using NLTK Named Entity Recognition, filters out repetition"
@@ -99,18 +100,32 @@ GOOGLE_EXTRACTORS: Extractors = [
 ]
 
 
-def fuzzy_intersect(left_names: Names, right_names: Names) -> Names:
-    if left_names == []:
-        return right_names
-    if right_names == []:
-        return left_names
-    intersect = [
-        min(left_name, right_name, key=len)
-        for left_name in left_names
-        for right_name in right_names
-        if any(part in left_name for part in right_name.split())
-    ]
-    return intersect
+def partition_similar(name: str, other_names: Names) -> Tuple[Names, Names]:
+    def similar_to(other_name: str) -> bool:
+        return name in other_name or other_name in name
+        #any(part in name for part in other_name.split())
+
+    return (
+        list(filter(similar_to, other_names)),
+        list(filterfalse(similar_to, other_names)),
+    )
+
+
+def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names:
+    if not recursive:
+        if not (left and right):
+            return left or right
+    else:
+        if not left:
+            return []
+    first_left, *remaining_left = left
+    similar_right, dissimilar_right = partition_similar(first_left, right)
+    if similar_right:
+        similar_left, dissimilar_left = partition_similar(first_left, remaining_left)
+        return [max(first_left, *similar_left, *similar_right, key=len)] + fuzzy_intersect(
+            dissimilar_left, dissimilar_right, True
+        )
+    return fuzzy_intersect(remaining_left, right, True)
 
 
 def remove_none(names: Names) -> Names:

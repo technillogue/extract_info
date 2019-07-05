@@ -1,5 +1,5 @@
 # mypy: disallow_untyped_decorators=False
-from typing import Any, List
+from typing import Any, List, Sequence
 import pytest
 import extract_names
 import extract_info
@@ -17,6 +17,22 @@ def test_every_name() -> None:
         "My name is Planet. My name is Fitness. My name is McCall. "
         "My name is X. My name is Paid. My name is cr. My name is card. "
     )
+
+
+def test_fuzzy_intersect() -> None:
+    cases: Sequence[Sequence[List[str]]] = [
+        (["Bob", "Miller"], ["Miller"], ["Miller"]),
+        (["Deadham", "Bob"], ["Bob Miller"], ["Bob Miller"]),
+        ([], ["Bob"], ["Bob"]),
+        (["Bob"], [], ["Bob"]),
+        (
+            ["Ariel Kochi", "Pierre Kochi"],
+            ["Ariel", "Kochi", "TO", "Pierre", "Kochi", "Marion"],
+            ["Ariel Kochi", "Pierre Kochi"],
+        ),
+    ]
+    for left, right, expected in cases:
+        assert extract_names.fuzzy_intersect(left, right) == expected
 
 
 LINE = "12/31 -- Lisa balloon drop -- off 123.123.1234 - paid, check deposited"
@@ -43,7 +59,7 @@ def test_too_many(monkeypatch: Any) -> None:
         assert actual  # return the best attempt, not nothing
         assert actual == ["Stephanie", "Ariel", "Lisa"]
         assert (
-            extract_info.Flags.too_much
+            extract_info.Flags.too_many
             in extract_info.extract_info(LINE, flags=True)["flags"]
         )
     except AssertionError:

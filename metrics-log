@@ -145,3 +145,9 @@ correct: 90.95%, not enough: 9.05%, too many: 0.00% [retroactive]
 # formatting
 # tweak reporting, correct flag setting
 # correct: 90.95%, too many: 4.12%, not enough: 4.94%, multiple contacts: 0.21%
+
+# tested and rewrote fuzzy_intersect
+# correct: 96.71%, too many: 1.23%, not enough: 2.06%, multiple contacts: 0.21%
+# 1270 seconds without cache, somewhat worse than before 
+# 652 google_extract_names calls at 1.455 seconds each, 948 total
+
