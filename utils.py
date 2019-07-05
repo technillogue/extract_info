@@ -43,23 +43,24 @@ class Cache:
     program runs, as a function decorator.
     only stores the first argument and repeats it exactly once when saving
     to disk, i.e. {text: {func1: result1, func2: result2}, text2: {...}, ...}
-    use finally: to make sure the cache gets saved
     """
 
     # maybe add cache hit/miss statistics in the future
     def __init__(self, cache_name: str = "data/cache.json"):
+        # this needs to be called before cached funcs are defined
         self.cache_name = cache_name
         self.func_names: List[str] = []
         self.cache: Dict[str, Dict[str, str]]
 
-    def open_cache(self) -> None:
+    def __enter__(self) -> None:
+        # this only needs to be called before cached funcs are called
         try:
             data = json.load(open(self.cache_name, encoding="utf-8"))
         except IOError:
             data = {}
         self.cache = defaultdict(dict, data)
 
-    def save_cache(self) -> None:
+    def __exist__(self, *exception_info: Any) -> None:
         with open(self.cache_name, "w", encoding="utf-8") as f:
             json.dump(dict(self.cache), f)
         print("saved cache")
@@ -82,7 +83,7 @@ class Cache:
             }
             for key in keep
         }
-        self.save_cache()
+        self.__exit__()
 
     def with_cache(self, func: Callable) -> Callable:
         func_name = func.__name__

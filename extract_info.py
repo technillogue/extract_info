@@ -98,7 +98,6 @@ def extract_info(
 
 
 if __name__ == "__main__":
-    cache.open_cache()
     parser = argparse.ArgumentParser("extract names and contact info from csv")
     # parser.add_argument("-p", "--preprocess", action="store_true")
     parser.add_argument("-c", "--clear", action="store_true")
@@ -106,7 +105,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.clear:
         cache.clear_cache("extract_info")
-    try:
+    with cache:
         lines = list(csv.reader(open("data/trello.csv", encoding="utf-8")))[1:]
         entries = [extract_info(line[0], flags=True) for line in lines]
         entry_types = {
@@ -133,5 +132,3 @@ if __name__ == "__main__":
             writer = csv.writer(f)
             writer.writerow(header)
             writer.writerows(rows)
-    finally:
-        cache.save_cache()
