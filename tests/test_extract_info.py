@@ -1,3 +1,4 @@
+# mypy: disallow_untyped_decorators=False
 import re
 from typing import Dict, List, Any, Tuple, Callable, Sequence
 import pytest
@@ -123,7 +124,7 @@ def generate_trace_tester() -> Callable[[Entry, str], None]:
 
     return trace_tester
 
-
+@pytest.fixture(name="traced_extract_info")
 def trace_extract_info() -> Callable:
     logger = utils.Logger()
     stages = tuple([logger.logged(strategy) for strategy in stage] for stage in STAGES)
@@ -138,16 +139,11 @@ def trace_extract_info() -> Callable:
     return traced_extract_info
 
 
-trace_extract_info_fixture = pytest.fixture(name="traced_extract_info")(
-    trace_extract_info
-)
+@pytest.fixture(name="labeled_example", params=LABELED_EXAMPLES)
+def labeled_example_fixture(request):
+    return request.param
 
-
-labeled_example_fixture = pytest.fixture(
-    params=LABELED_EXAMPLES, name="labeled_example"
-)(lambda request: request.param)
-
-
+@pytest.mark.usefixtures("save_cache")
 def test_examples(
     labeled_example: Tuple[Entry, bool], traced_extract_info: Callable
 ) -> None:
@@ -167,6 +163,3 @@ def test_examples(
     # could try reclassifying everything in case something is falsely
     # marked as wrong
 
-def test_last() -> None:
-    # fake test
-    utils.cache.save_cache()
