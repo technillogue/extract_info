@@ -96,12 +96,10 @@ def extract_info(
 
 def main() -> Dict:
     parser = argparse.ArgumentParser("extract names and contact info from csv")
-    parser.add_argument("-c", "--clear", action="store_true")
-    parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument("-i", "--input", default="data/trello.csv")
+    parser.add_argument("-o", "--output", default="data/info.csv")
     args = parser.parse_args()
-    if args.clear:
-        cache.clear_cache("extract_info")
-    lines = list(csv.reader(open("data/trello.csv", encoding="utf-8")))[1:]
+    lines = list(csv.reader(open(args.input, encoding="utf-8")))[1:]
     with cache:
         entries = [extract_info(line[0], flags=True) for line in lines]
         entry_types = {
@@ -120,7 +118,7 @@ def main() -> Dict:
                 *[entry[heading] for heading in header], fillvalue=""
             )
         ]
-        with open("data/info.csv", "w", encoding="utf-8") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(header)
             writer.writerows(rows)
