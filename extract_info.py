@@ -40,7 +40,7 @@ def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
     # if there's 1 email and 3 phones, min_names should be 1
     # but if there's 0 email and 1 phone, it should be 1, not 0
     min_names: int = max(1, min(contact_counts))
-    max_names: int = sum(contact_counts)
+    max_names: int = max(contact_counts)
     # maybe add min, likely_max, absolute_max to distingish max vs sum?
     return (min_names, max_names)
 
@@ -78,7 +78,7 @@ def extract_info(
             result["flags"] = [Flags.skipped]
             return result
         result["flags"] = [
-            (Flags.one_contact if min_names == 1 else Flags.multiple_contacts),
+            (Flags.one_contact if max_names == 1 else Flags.multiple_contacts),
             decide_exit_type(names, min_names, max_names),
             Flags.all,
         ]
@@ -97,9 +97,11 @@ def main() -> Dict:
             flag: [entry for entry in entries if flag in entry["flags"]]
             for flag in Flags
         }
+        print()
         counts = dict(zip(entry_types.keys(), map(len, entry_types.values())))
         for flag in list(Flags)[:4]:
             print("{}: {:.2%}. ".format(flag, counts[flag] / counts[Flags.all]), end="")
+        print()
         # padding
         header = ["line", "emails", "phones", "names"]
         rows = [

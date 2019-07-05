@@ -153,3 +153,15 @@ correct: 90.95%, not enough: 9.05%, too many: 0.00% [retroactive]
 
 # switched to original trello csv
 # correct: 96.09%, too many: 1.85%, not enough: 2.06%, multiple contacts: 0.21%
+
+# switched to phonenumbers lib
+# correct: 96.48%. too many: 1.68% not enough: 1.86%. multiple contacts: 0.00%
+
+# switched back to max instead of sum for max_names to have a stricter metric, since
+# there are only a few cases where there's actually one phone number for one person
+# and one email for another person and we miss the second person by overrefining
+# correct: 94%. too many: 4.14%. not enough: 1.86%. multiple contacts: 0.00%
+
+# switched back to max_names == 1 as multiple contacts
+# correct: 94%. too many: 4.14%. not enough: 1.86%. multiple contacts: 13.46%
+
