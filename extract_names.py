@@ -1,5 +1,5 @@
 import string
-from itertools import permutations, combinations, filterfalse, tee
+from itertools import combinations, filterfalse, tee
 from functools import reduce
 from typing import List, Callable, Iterator, Sequence, Tuple
 import google_analyze
@@ -7,35 +7,28 @@ from utils import cache, compose
 
 Names = List[str]
 NameAttempts = Iterator[Names]
-# general functions
-
 
 def contains_nonlatin(text: str) -> bool:
     return not any(map(string.printable.__contains__, text))
     # .84usec faster pcall than using a comprehension
 
-
-# combinatorial functions
-## extractors
-### "crude" extractors
-
-
 @cache.with_cache
 def nltk_extract_names(text: str) -> Names:
-    "returns names using NLTK Named Entity Recognition, filters out repetition"
+    "Returns names using NLTK Named Entity Recognition filtering repetition"
     import nltk
-
-    names = []
-    for sentance in nltk.sent_tokenize(text):
-        for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance))):
-            if isinstance(chunk, nltk.tree.Tree):
-                if chunk.label() == "PERSON":
-                    names.append(" ".join([c[0] for c in chunk]))
+    names = [
+        " ".join(labeled[0] for labeled in chunk)
+        for sentance in nltk.sent_tokenize(text)
+        for chunk in nltk.ne_chunk(nltk.pos_tag(nltk.word_tokenize(sentance)))
+        if isinstance(chunk, nltk.tree.Tree) and chunk.label() == "PERSON"
+    ]
     # remove any names that contain each other
-    for name1, name2 in permutations(names, 2):
-        if name1 in name2:
-            names.remove(name1)
-    return names
+    duplicate_names = [
+        max(name1, name2, key=len)
+        for name1, name2 in combinations(names, 2)
+        if name1 in name2 or name2 in name1
+    ]
+    return list(set(names) - set(duplicate_names))
 
 
 def all_capitalized_extract_names(text: str) -> List[str]:
