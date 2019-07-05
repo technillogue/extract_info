@@ -205,7 +205,9 @@ def extract_names(  # pylint: disable=dangerous-default-value,too-many-arguments
             if min_names <= len(refinement) <= max_names
         )
     except StopIteration:
-        every_refinement = list(fallback)
+        every_refinement = list(fallback)  # note: this has a bunch of [] at the end
         if max(map(len, every_refinement)) < min_names:
             return max(every_refinement, key=len)
-        return min(every_refinement, key=len)
+        return min(
+            filter(None, every_refinement), key=len, default=list()
+        )  # smallest non-empty but [] if they're all empty
