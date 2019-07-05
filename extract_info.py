@@ -107,7 +107,7 @@ if __name__ == "__main__":
     if args.clear:
         cache.clear_cache("extract_info")
     try:
-        lines = list(csv.reader(open("data/info_edited.csv", encoding="utf-8")))[1:]
+        lines = list(csv.reader(open("data/trello.csv", encoding="utf-8")))[1:]
         entries = [extract_info(line[0], flags=True) for line in lines]
         entry_types = {
             flag: [entry for entry in entries if flag in entry["flags"]]

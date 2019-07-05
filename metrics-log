@@ -151,3 +151,5 @@ correct: 90.95%, not enough: 9.05%, too many: 0.00% [retroactive]
 # 1270 seconds without cache, somewhat worse than before 
 # 652 google_extract_names calls at 1.455 seconds each, 948 total
 
+# switched to original trello csv
+# correct: 96.09%, too many: 1.85%, not enough: 2.06%, multiple contacts: 0.21%
