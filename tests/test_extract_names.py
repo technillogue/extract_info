@@ -31,6 +31,7 @@ def test_no_google() -> None:
         extract_names.extract_names(LINE, 1, 1)
     assert actual == expected
 
+
 @pytest.mark.usefixtures("save_cache")
 def test_too_many(monkeypatch: Any) -> None:
     def mock_fuzzy_intersect(*_dummy: Any) -> List[str]:
@@ -41,7 +42,10 @@ def test_too_many(monkeypatch: Any) -> None:
         actual = extract_names.extract_names(LINE, 1, 1)
         assert actual  # return the best attempt, not nothing
         assert actual == ["Stephanie", "Ariel", "Lisa"]
-        assert "too much" in extract_info.extract_info(LINE, flags=True)["flags"]
+        assert (
+            extract_info.Flags.too_much
+            in extract_info.extract_info(LINE, flags=True)["flags"]
+        )
     except AssertionError:
         breakpoint()
         actual = extract_names.extract_names(LINE, 1, 1)

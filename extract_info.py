@@ -4,12 +4,25 @@ import csv
 import re
 import itertools
 import argparse
+from enum import Enum
 from typing import List, Dict, Tuple, Any
 from extract_names import extract_names
 from utils import cache
-
-
 # requires python3.6+
+
+
+class Flags(str, Enum):
+    too_many = "too many"
+    correct = "correct"
+    not_enough = "not enough"
+    multiple_contacts = "multiple contacts"
+    one_contact = "one_contact"
+    all = "all"
+    skipped = "skipped"
+
+    def __str__(self) -> str:
+        return self.value
+
 
 PHONE_RE = re.compile(
     r"(\d{3}[-\.\s]??\d{3}[-\.\s]??\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]??\d{4}|\d{3}[-\.\s]??\d{4})"
@@ -44,13 +57,14 @@ def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
     return (min_names, max_names)
 
 
-def decide_exit_type(names: List[str], min_names: int, max_names: int) -> str:
+def decide_exit_type(names: List[str], min_names: int, max_names: int) -> Flags:
     names_count = len(names)
     if names_count <= max_names:
         if names_count < min_names:
-            return "not enough"
-        return "correct"
-    return "too much"
+            return Flags.not_enough
+        return Flags.correct
+    return Flags.too_many
+
 
 def extract_info(
     raw_line: str, flags: bool = False, **extract_names_kwargs: Any
@@ -72,13 +86,13 @@ def extract_info(
     if flags:
         return {
             **result,
-            "flags": ["skipped"]
+            "flags": [Flags.skipped]
             if not max_names
             else [
-                ("one contact" if max_names == 1 else "multiple contacts"),
+                (Flags.one_contact if min_names == 1 else Flags.one_contact),
                 decide_exit_type(names, min_names, max_names),
-                "all",
-            ]
+                Flags.all,
+            ],
         }
     return result
 
@@ -97,20 +111,13 @@ if __name__ == "__main__":
         entries = [extract_info(line[0], flags=True) for line in lines]
         entry_types = {
             flag: [entry for entry in entries if flag in entry["flags"]]
-            for flag in [
-                "too many",
-                "correct",
-                "not enough",
-                "multiple contacts",
-                "one contact",
-                "all",
-            ]
+            for flag in Flags
         }
         counts = dict(zip(entry_types.keys(), map(len, entry_types.values())))
         print(
             ", ".join(
-                "{}: {:.2%}".format(category, counts[category] / counts["all"])
-                for category in ("correct", "not enough", "too many", "multiple contacts")
+                "{}: {:.2%}".format(flag, counts[flag] / counts[Flags.all])
+                for flag in Flags
             )
         )
         # padding

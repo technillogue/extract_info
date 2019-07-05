@@ -72,19 +72,19 @@ def regex_gen(
 # as soon as a given strategy for this stage doesn't work, it should jump
 # to the next strategy for this stage without trying the next stages
 PATTERN_DEFINITIONS = {
-    "correct": {
+    extract_info.Flags.correct: {
         # try current strategy; if it works, next stage, otherwise, next strategy
         "continuation_rule": "{strategy}\n({next_stages}|{next_strategies})",
         # in the correct case, we get to every stage
         "terminal_rule": "{last_strategy}\n{next_stages}",
     },
-    "not enough": {
+    extract_info.Flags.not_enough: {
         # we might not get to the next stage but we have to try every strategy
         "continuation_rule": "{strategy}\n({next_stages})?{next_strategies}",
         # don't need to go to the next if there isn't a working strategy
         "terminal_rule": "{last_strategy}\n({next_stages})?",
     },
-    "too much": {
+    extract_info.Flags.too_many: {
         # we just have to try every combination, because "works" is definied as
         # "has enough items"-- we only check if there are too many at the very end
         "continuation_rule": "{strategy}\n{next_stages}\n{next_strategies}",
