@@ -99,20 +99,17 @@ GOOGLE_EXTRACTORS: Extractors = [
 ]
 
 
-## refiners
-def fuzzy_intersect(google_names: Names, crude_names: Names) -> Names:
-    if google_names == []:
-        return crude_names
-    intersect = []
-    for crude_name in crude_names:
-        if contains_nonlatin(crude_name):
-            intersect.append(crude_name)
-            # google doesn't work with non-latin characters
-            # so we ignore it in those cases
-        else:
-            for google_name in google_names:
-                if [part for part in crude_name.split() if part in google_name]:
-                    intersect.append(crude_name)
+def fuzzy_intersect(left_names: Names, right_names: Names) -> Names:
+    if left_names == []:
+        return right_names
+    if right_names == []:
+        return left_names
+    intersect = [
+        min(left_name, right_name, key=len)
+        for left_name in left_names
+        for right_name in right_names
+        if any(part in left_name for part in right_name.split())
+    ]
     return intersect
 
 
