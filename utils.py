@@ -114,7 +114,7 @@ class Logger:
             **kwargs: Any
         ) -> Any:
             _log.debug(_name)
-            return _funcn(*args, **kwargs)
+            return _func(*args, **kwargs)
 
         return wrapper
 
