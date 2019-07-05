@@ -39,27 +39,28 @@ def compose(f: Callable[[Y], Z], g: Callable[[X], Y]) -> Callable[[X], Z]:
 
 class Cache:
     """
-    non-functional cache for storing expensive computation in between
-    program runs, as a function decorator.
-    only stores the first argument and repeats it exactly once when saving
+    Non-functional persistent cache for storing expensive computation between runs.
+
+    Only stores the first argument and repeats it exactly once when saving
     to disk, i.e. {text: {func1: result1, func2: result2}, text2: {...}, ...}
-    use finally: to make sure the cache gets saved
     """
 
     # maybe add cache hit/miss statistics in the future
     def __init__(self, cache_name: str = "data/cache.json"):
+        # thisneeds to be called before any cache-decorated functions are defined
         self.cache_name = cache_name
         self.func_names: List[str] = []
         self.cache: Dict[str, Dict[str, str]]
 
-    def open_cache(self) -> None:
+    def __enter__(self) -> None:
+        # this only need to be called before any cache-decorated functions are called
         try:
             data = json.load(open(self.cache_name, encoding="utf-8"))
         except IOError:
             data = {}
         self.cache = defaultdict(dict, data)
 
-    def save_cache(self) -> None:
+    def __exit__(self, *exception_info: Any) -> None:
         with open(self.cache_name, "w", encoding="utf-8") as f:
             json.dump(dict(self.cache), f)
         print("saved cache")
@@ -68,21 +69,6 @@ class Cache:
         for item in self.cache.values():
             if func_name in item:
                 del item[func_name]
-
-    def clever_clear_cache(self) -> None:
-        import csv
-
-        lines = {line[0] for line in csv.reader(open("data/info_edited.csv"))}
-        keep = lines.intersection(self.cache)
-        keep_funcs = {"google_extract_names", "nltk_extract_names"}
-        self.cache = {
-            key: {
-                func: self.cache[key][func]
-                for func in keep_funcs.intersection(set(self.cache[key].keys()))
-            }
-            for key in keep
-        }
-        self.save_cache()
 
     def with_cache(self, func: Callable) -> Callable:
         func_name = func.__name__
@@ -109,6 +95,8 @@ class Cache:
         return wrapper
 
 
+cache = Cache()
+
 class Logger:
     def __init__(self, log_name: str = "trace", stream: Optional[IO] = None):
         self.log = logging.getLogger(log_name)
@@ -116,17 +104,17 @@ class Logger:
         self.handler: Optional[logging.Handler] = None
         self.new_stream(stream)
 
-    def logged(self, fn: Callable) -> Callable:
-        @functools.wraps(fn)
+    def logged(self, func: Callable) -> Callable:
+        @functools.wraps(func)
         def wrapper(
             *args: Any,
-            _fn: Callable = fn,
+            _func: Callable = func,
             _log: logging.Logger = self.log,
-            _name: str = fn.__name__,
+            _name: str = func.__name__,
             **kwargs: Any
         ) -> Any:
             _log.debug(_name)
-            return _fn(*args, **kwargs)
+            return _funcn(*args, **kwargs)
 
         return wrapper
 
@@ -144,7 +132,3 @@ class Logger:
         if isinstance(self.stream, io.StringIO):
             return self.stream.getvalue()
         raise NotImplementedError
-
-
-cache = Cache()
-cache.open_cache()
