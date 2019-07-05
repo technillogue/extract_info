@@ -2,7 +2,7 @@ from __future__ import division
 import sys
 import csv
 import re
-import itertools
+from itertools import zip_longest
 import argparse
 from enum import Enum
 from typing import List, Dict, Tuple, Any
@@ -85,6 +85,29 @@ def extract_info(
     return result
 
 
+def save_entries(entries: List[Entry], fname: str) -> None:
+    header = ["line", "emails", "phones", "names"]
+    with open(fname, "w", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        for entry in entries:
+            contact_infos = [entry[heading] for heading in header]
+            contacts = zip_longest(*contact_infos, fillvalue="")
+            for contact in contacts:
+                writer.writerow(list(contact))
+
+
+def metrics(entries: List[Entry]) -> Dict:
+    entry_types = {
+        flag: [entry for entry in entries if flag in entry["flags"]] for flag in Flags
+    }
+    counts = dict(zip(entry_types.keys(), map(len, entry_types.values())))
+    for flag in list(Flags)[:4]:
+        print("{}: {:.2%}. ".format(flag, counts[flag] / counts[Flags.all]), end="")
+    print()
+    return locals()
+
+
 def main() -> Dict:
     parser = argparse.ArgumentParser("extract names and contact info from csv")
     parser.add_argument("-i", "--input", default="data/trello.csv")
@@ -93,29 +116,8 @@ def main() -> Dict:
     lines = list(csv.reader(open(args.input, encoding="utf-8")))[1:]
     with cache:
         entries = [extract_info(line[0], flags=True) for line in lines]
-        entry_types = {
-            flag: [entry for entry in entries if flag in entry["flags"]]
-            for flag in Flags
-        }
-        print()
-        counts = dict(zip(entry_types.keys(), map(len, entry_types.values())))
-        for flag in list(Flags)[:4]:
-            print("{}: {:.2%}. ".format(flag, counts[flag] / counts[Flags.all]), end="")
-        print()
-        # padding
-        header = ["line", "emails", "phones", "names"]
-        rows = [
-            list(triple)
-            for entry in entries
-            for triple in itertools.zip_longest(
-                *[entry[heading] for heading in header], fillvalue=""
-            )
-        ]
-        with open(args.output, "w", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(header)
-            writer.writerows(rows)
-        return locals()
+    save_entries(entries, args.output)
+    return metrics(entries)
 
 
 if __name__ == "__main__":
