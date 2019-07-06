@@ -87,7 +87,9 @@ PATTERN_DEFINITIONS = {
     extract_info.Flags.too_many: {
         # we just have to try every combination, because "works" is definied as
         # "has enough items"-- we only check if there are too many at the very end
-        "continuation_rule": "{strategy}\n{next_stages}\n{next_strategies}",
+        # however, sometimes a strategy might return nothing, and then skipping
+        # to the next strategy makes sense
+        "continuation_rule": "{strategy}\n({next_stages})?{next_strategies}",
         "terminal_rule": "{last_strategy}\n{next_stages}",
     },
 }
@@ -109,8 +111,8 @@ def generate_trace_tester() -> Callable[[Entry, str], None]:
 
     # no rest for the test-driven wicked
     regex_gen_pattern = (
-        "stages_recurser\n" * len(stages_strategy_names)
-        + "strategy_recurser\n" * sum(map(len, stage_strategies))
+        "stages_recurser\n" * len(STAGES)
+        + "strategy_recurser\n" * sum(map(len, STAGES))
     ) * len(PATTERN_DEFINITIONS)
     assert re.match(regex_gen_pattern, metatest_logger.get_log()) is not None
 

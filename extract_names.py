@@ -45,6 +45,7 @@ Extractors = Sequence[Callable[[str], Names]]
 CRUDE_EXTRACTORS: Extractors = [nltk_extract_names, all_capitalized_extract_names]
 # try adding nltk_extract_names_only_alpha
 
+
 @cache.with_cache
 def google_extract_names(text: str) -> Names:
     "Return names using Google Cloud Knowledge Graph Named Entity Recognition."
@@ -167,16 +168,13 @@ def extract_names(
     google_extractions: Iterator[Names] = filter_min_criteria(
         extractor(text) for extractor in google_extractors
     )
-    crude_extractions: Iterator[Names] = filter_min_criteria(
-        extractor(text) for extractor in crude_extractors
-    )
-    consensuses: Iterator[Names] = filter_min_criteria(
+    consensuses = (
         fuzzy_intersect(google_extraction, crude_extraction)
         for google_extraction in google_extractions
-        for crude_extraction in crude_extractions
+        for crude_extraction in filter_min_criteria(
+            extractor(text) for extractor in crude_extractors
+        )
     )
-
-
     refinements, fallback = tee(
         refine(consensus) for consensus in consensuses for refine in refiners
     )
