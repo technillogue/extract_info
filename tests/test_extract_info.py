@@ -102,17 +102,16 @@ def generate_trace_tester() -> Callable[[Entry, str], None]:
 
     metatest_logger = utils.Logger(log_name="metatest")
 
-    regex_gen_pattern = (
-        "stages_recurser\n" * len(stages_strategy_names)
-        + "strategy_recurser\n"
-        * sum(len(stage_strategies) for stage_strategies in stages_strategy_names)
-    ) * len(PATTERN_DEFINITIONS)
-
     patterns = {
         exit_type: regex_gen(stages_strategy_names, **definition)
         for exit_type, definition in PATTERN_DEFINITIONS.items()
     }
+
     # no rest for the test-driven wicked
+    regex_gen_pattern = (
+        "stages_recurser\n" * len(stages_strategy_names)
+        + "strategy_recurser\n" * sum(map(len, stage_strategies))
+    ) * len(PATTERN_DEFINITIONS)
     assert re.match(regex_gen_pattern, metatest_logger.get_log()) is not None
 
     def trace_tester(result: Entry, trace: str) -> None:

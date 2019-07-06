@@ -49,7 +49,6 @@ class Cache:
     def __init__(self, cache_name: str = "data/cache.json"):
         # this needs to be called before cached funcs are defined
         self.cache_name = cache_name
-        self.func_names: List[str] = []
         self.cache: Dict[str, Dict[str, str]]
 
     def __enter__(self) -> None:
@@ -72,7 +71,6 @@ class Cache:
 
     def with_cache(self, func: Callable) -> Callable:
         func_name = func.__name__
-        self.func_names.append(func_name)
 
         @functools.wraps(func)
         def wrapper(arg1: Union[str, List[str]], *args: Any, **kwargs: Any) -> Any:

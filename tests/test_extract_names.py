@@ -8,7 +8,7 @@ import extract_info
 def test_contains_nonlatin() -> None:
     assert not extract_names.contains_nonlatin("Stephanie")
     assert extract_names.contains_nonlatin(u"Лена")
-
+    assert extract_names.contains_nonlatin(u"Лена Stephanie")
 
 def test_every_name() -> None:
     assert extract_names.every_name(

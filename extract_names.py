@@ -8,14 +8,17 @@ from utils import cache, compose
 Names = List[str]
 NameAttempts = Iterator[Names]
 
+
 def contains_nonlatin(text: str) -> bool:
     return not any(map(string.printable.__contains__, text))
     # .84usec faster pcall than using a comprehension
+
 
 @cache.with_cache
 def nltk_extract_names(text: str) -> Names:
     "Returns names using NLTK Named Entity Recognition filtering repetition"
     import nltk
+
     names = [
         " ".join(labeled[0] for labeled in chunk)
         for sentance in nltk.sent_tokenize(text)
@@ -32,44 +35,32 @@ def nltk_extract_names(text: str) -> Names:
 
 
 def all_capitalized_extract_names(text: str) -> List[str]:
-    return [
-        "".join(filter(str.isalpha, word))
-        for word in text.split()
-        if word[0].isupper() and not all(map(str.isupper, word[1:]))
-        # McCall is a name, but ELISEVER isn't
-    ]
+    words = ("".join(filter(str.isalpha, word)) for word in text.split())
+    # McCall is a name, but ELISEVER isn't
+    return [word for word in words if word and word[0].isupper() and not word.isupper()]
 
 
 Extractors = Sequence[Callable[[str], Names]]
 
 CRUDE_EXTRACTORS: Extractors = [nltk_extract_names, all_capitalized_extract_names]
-
-### google extractor and preprocessors
-
+# try adding nltk_extract_names_only_alpha
 
 @cache.with_cache
 def google_extract_names(text: str) -> Names:
-    """
-    returns names using Google Cloud Knowledge Graph Named Entity Recognition
-    skips non-ASCII charecters
-    """
+    "Return names using Google Cloud Knowledge Graph Named Entity Recognition."
     latin_text = "".join(filter(string.printable.__contains__, text))
     return google_analyze.extract_entities(latin_text)
-    # TO DO: merge adjacent names
 
 
-# use lru here? currently compose strips this cache
 @cache.with_cache
 def only_alpha(text: str) -> str:
-    "remove words that don't have any alphabetical chareceters or -"
-    return " ".join(
-        [
-            word
-            for word in text.split()
-            if all(c.isalpha() or c in r"-/\$%(),.:;?!" for c in word)
-            # relatively bad, 0.8s tottime
-        ]
-    )
+    "Remove words without any alphabetical chareceters or dashes."
+    words = [
+        word
+        for word in text.split()
+        if all(c.isalpha() or c in r"-/\$%(),.:;?!" for c in word)
+    ]
+    return " ".join(words)
 
 
 def no_preprocess(text: str) -> str:
@@ -79,7 +70,6 @@ def no_preprocess(text: str) -> str:
 @cache.with_cache
 def every_name(text: str) -> str:
     return "".join(map("My name is {}. ".format, only_alpha(text).split()))
-    # explore some option for merging adjacent names?
 
 
 GOOGLE_PREPROCESSES: List[Callable[[str], str]] = [
@@ -96,7 +86,6 @@ GOOGLE_EXTRACTORS: Extractors = [
 def partition_similar(name: str, other_names: Names) -> Tuple[Names, Names]:
     def similar_to(other_name: str) -> bool:
         return name in other_name or other_name in name
-        #any(part in name for part in other_name.split())
 
     return (
         list(filter(similar_to, other_names)),
@@ -115,9 +104,8 @@ def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names
     similar_right, dissimilar_right = partition_similar(first_left, right)
     if similar_right:
         similar_left, dissimilar_left = partition_similar(first_left, remaining_left)
-        return [max(first_left, *similar_left, *similar_right, key=len)] + fuzzy_intersect(
-            dissimilar_left, dissimilar_right, True
-        )
+        intersection = max(first_left, *similar_left, *similar_right, key=len)
+        return [intersection] + fuzzy_intersect(dissimilar_left, dissimilar_right, True)
     return fuzzy_intersect(remaining_left, right, True)
 
 
@@ -127,8 +115,7 @@ def remove_none(names: Names) -> Names:
 
 @cache.with_cache
 def remove_synonyms(names: Names) -> Names:
-    "removes words that have wordnet synonyms"
-    from nltk.corpus import wordnet
+    from nltk.corpus import wordnet  # if this is cached we don't need to import nltk
 
     return [
         name
@@ -139,7 +126,6 @@ def remove_synonyms(names: Names) -> Names:
 
 @cache.with_cache
 def remove_nonlatin(names: Names) -> Names:
-    """ keep names that contain no nonlatin chars"""
     return list(filterfalse(contains_nonlatin, names))
     # this is .5 usec faster than using a comprehension
 
@@ -173,21 +159,7 @@ def extract_names(
     stages: Tuple[Extractors, Extractors, Refiners] = STAGES,
 ) -> Names:
     google_extractors, crude_extractors, refiners = stages
-    # maybe in the future wrap everyone so that they could be reduced?
-    # i.e. so that google_extractors return (text, names) and crude_extractors
-    # take (text, names) and does fuzzy_intersect by itself to return consensus names
-    # then you could do something like
-    # big_enough_consensuses = (
-    #   reduce(
-    #       lambda arg, strategy: filter_min_criteria(strategy(arg)),
-    #       strategy_combination,
-    #       initial=text
-    #   )
-    #   for strategy_combination in product(*stages)
-    # )
-    # however, the overhead of wrapping everything into stages kind of sucks
-    # you could try making it homogenous
-    # Strategy = Callable[[str, Names, Names], Tuple[str, Names, Names]]
+
     def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
         yield from (attempt for attempt in attempts if len(attempt) >= min_names)
         yield []
@@ -203,6 +175,8 @@ def extract_names(
         for google_extraction in google_extractions
         for crude_extraction in crude_extractions
     )
+
+
     refinements, fallback = tee(
         refine(consensus) for consensus in consensuses for refine in refiners
     )
