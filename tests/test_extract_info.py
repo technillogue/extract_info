@@ -73,8 +73,12 @@ def regex_gen(
 # to the next strategy for this stage without trying the next stages
 PATTERN_DEFINITIONS = {
     extract_info.Flags.correct: {
-        # try current strategy; if it works, next stage, otherwise, next strategy
-        "continuation_rule": "{strategy}\n({next_stages}|{next_strategies})",
+        # try current strategy; if it doesn't work, next strategy. if it does,
+        # next stage. however, the next stage might fail, then next strategy
+        "continuation_rule": (
+            "{strategy}\n"
+            "({next_stages}|{next_strategies}|{next_stages}{next_strategies})"
+        ),
         # in the correct case, we get to every stage
         "terminal_rule": "{last_strategy}\n{next_stages}",
     },
@@ -93,6 +97,28 @@ PATTERN_DEFINITIONS = {
         "terminal_rule": "{last_strategy}\n{next_stages}",
     },
 }
+
+
+def test_regex_gen():
+    # you can realize that it's wrong and jump to the next
+    # you can continue to the next and have it work
+    # or you can continue to the next and not have it work and need the next thing
+    #
+    verbose_example = """
+                        G1  (   C1    (     R1 (|R2))
+                                      |     C2  R1 (|R2)
+                                      )
+                            |   G2 C1 (     R1 (|R2)
+                                      |     C2 R1 (|R2)
+                                      )
+                            )
+                      """
+    example = re.sub("(1|2)", r"\1\n", re.sub(r"\s", "", verbose_example))
+    actual = regex_gen(
+        [["G1", "G2"], ["C1", "C2"], ["R1", "R2"]],
+        **PATTERN_DEFINITIONS[extract_info.Flags.correct],
+    )
+
 
 Entry = Dict[str, List[str]]
 
