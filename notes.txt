@@ -1,0 +1,46 @@
+i# so if you can generate a list of states properly as linear transitions
+# (...X, Y, ...) -> (..X, Y+1, ...) + (...X, last Y, ..) -> (..X+1, -1, ..)
+# A0 B0, A1 B0, A1 B1, A1 B2, A2 B1, A2 B2
+# (-1, -1), (0, -1), (0, 0), (0, 1), (1, 0), (1, 1)
+# A1 B1, A1 B2, A2 B1, A2 B2
+# 111, 112, 121, 122, 211, 212, 221, 222
+# 0 0, 1 0, 1, 1
+#
+# if we don't include null states we have the correct ordering trivially
+# maybe if we include epsillons and closures...?
+# if you include null states each transition corresponds to one symbol
+# if you don't, then you read "A1 B1 C1" (three symbols) and that's your first state
+# we can maybe just chop that first part except not always
+# because A1 A2 B1 C1 is valid
+# so we have to have null states
+# but A0 B1 doesn't make sense
+# will we ever hit it? A1 is always the first symbol read
+# so you always go (000) -> (100)
+# so maybe include null states except for the first one and
+# manually start at 100 -> 101 (also not valid)
+# states don't always have to be in descending order
+# also later you're going to have to figure out ...X, 0 -> X+1, 0
+# that requires you to have the rightmost non-zero
+# and therefore that nonzeros cannot be preceeded by zeros
+# {
+#     state: {
+#         stages_strategy_names[state.index(0) - 1][state[state.index(0) - 1
+#         : tuple(strategy + 1 if stage is state.index(0) - 1 else strategy
+#                     for index, strategy in enumerate(state))
+#     for state in states
+#     if 0 in state and state.index(0) > 0
+# }
+
+# for strategy_combination in product(*map(enumerate, stages_strategies)):
+#    if
+
+# and then fill in (..X, 0, ..) -> (..X+1, 0...) jumps you're golden
+
+# (X, Y, 0) -> (X+1, Y, 0); (X, Y+1, 0)
+# (..., X, Y, ...) -> (..., X+1, Y, ..) or (..., X, Y+1, ..)
+# (..., X, last Y) -> (..., X+1, Y0)
+# (last X, 0, 0) -> not enough
+# (last X, last Y) -> not enough
+# (last X, last Y, last Z) -> too many (technically also not enough but w/e)
+# (X, Y, Z) -> correct
+# so just don't include those as states and check the last state to see if it works

@@ -1,10 +1,10 @@
 import json
 import random
 import os
-from typing import Dict, List, Iterable, Tuple
+from typing import Mapping, List, Iterable, Tuple
 import extract_names
 
-Entry = Dict[str, List[str]]
+Entry = Mapping[str, List[str]]
 EXAMPLES_FNAME = "data/examples.json"
 EXAMPLES: List[Entry] = json.load(open(EXAMPLES_FNAME, encoding="utf-8"))
 COUNTEREXAMPLES_FNAME = "data/counterexamples.json"
@@ -26,7 +26,7 @@ def fd_input(prompt: str) -> str:
         return stdin.readline()
 
 
-def ask(actual: Dict, show_contact_info: bool = False) -> bool:
+def ask(actual: Mapping, show_contact_info: bool = False) -> bool:
     fd_print("\nLINE: {line}\nNAMES: {names}\n".format(**actual))
     if show_contact_info:
         fd_print("\nPHONES: {phones}\nEMAILS: {emails}".format(**actual))

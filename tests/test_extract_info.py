@@ -1,6 +1,6 @@
 # mypy: disallow_untyped_decorators=False
-import re
-from typing import Dict, List, Any, Tuple, Callable, Sequence
+from typing import Mapping, List, Any, Tuple, Callable, Sequence, Iterable
+from itertools import product
 import pytest
 import extract_info
 import extract_names
@@ -13,141 +13,102 @@ STAGES: Sequence[Sequence[Callable]] = extract_names.STAGES
 # the original annotation is more specific, but we just care that
 # they're callables here
 
+State = Tuple[int, ...]
+Graph = Mapping[State, Mapping[str, State]]
 
-def regex_gen(
-    stages_strategy_names: List[List[str]], continuation_rule: str, terminal_rule: str
-) -> str:
-    """
-    Generate a regex that should match a call trace following given rules.
 
-    Our code has three stages and various strategies for each stage, and tries
-    different combinations of strategies in a specific order.
-    This corresponds to a finate state automata where the symbols are the names
-    of each of each strategy and the states are the possibile combinations of
-    strategies for each stage (including "not doing this stage right now" as the
-    0th straegy.
-    We can inject logging to trace which strategies are tried.
-    Because each FSA corresponds to a regex, we can generate a regex that
-    matches correct sequences of calls.
-    """
-    metatest_logger = utils.Logger(log_name="metatest")
+def generate_graph(
+    strategies: List[List[str]]
+) -> Iterable[Tuple[State, Mapping[str, State]]]:
+    "Yield a graph describing valid transitions between combinations of strategies"
+    # state[i] is an index of strategies[i]
+    states = product(*(range(len(stage)) for stage in strategies))
+    # zeros cannot be followed by zeros, we can't have started stage n+1 but not n
+    valid_states = [
+        state for state in states if not (0 in state and any(state[state.index(0) :]))
+    ]
+    for state, step_state in zip(valid_states[:-1], valid_states[1:]):
+        first_change = [
+            index
+            for index, strategy in enumerate(state)
+            if step_state[index] is not strategy
+        ][0]
+        step_symbol = strategies[first_change][step_state[first_change]]
+        if 0 in state:
+            incremented_stage = state.index(0) - 1
+            # can't skip if there isn't a previous stage to increment
+            # not if that stage has run out
+            if (
+                incremented_stage >= 0
+                and len(strategies[incremented_stage]) > state[incremented_stage] + 1
+            ):
+                skip_symbol = strategies[incremented_stage][
+                    state[incremented_stage] + 1
+                ]
+                skip_state = tuple(
+                    {incremented_stage: strategy + 1, incremented_stage + 1: 0}.get(
+                        stage, strategy
+                    )
+                    for stage, strategy in enumerate(state)
+                )
+                yield (state, {step_symbol: step_state, skip_symbol: skip_state})
+                continue
+        yield (state, {step_symbol: step_state})
 
-    @metatest_logger.logged
-    def strategy_recurser(strategies: List[str], next_stages: str) -> str:
-        if len(strategies) == 1:
-            return terminal_rule.format(
-                last_strategy=strategies[0], next_stages=next_stages
-            )
-        # how can our metaprogramming be real if our scopes aren't real
-        # in other terms, variables not found in locals() will be first looked up in the
-        # context of *this call* of strategy_recurser-- that's why this trick works in the first place
-        next_strategies = strategy_recurser(strategies[1:], next_stages)
-        return continuation_rule.format(
-            strategy=strategies[0],
-            next_stages=next_stages,
-            next_strategies=next_strategies,
+
+def test_generate_graph():
+    strategies = [["a", "A"], ["b", "B"]]
+    actual = {state: transition for state, transition in generate_graph(strategies)}
+    expected = {
+        (0, 0): {"a": (1, 0)},
+        (1, 0): {"b": (1, 1), "A": (2, 0)},
+        (1, 1): {"B": (1, 2)},
+        (1, 2): {"A": (2, 0)},
+        (2, 0): {"b": (2, 1)},
+        (2, 1): {"B": (2, 2)},
+    }
+    assert actual == expected
+
+
+def walk_graph(symbols: List[str], state: State, graph: Graph, trace: str) -> State:
+    if not symbols:
+        return state
+    current_symbol, *next_symbols = symbols
+    try:
+        next_state = graph[state][current_symbol]
+    except KeyError:
+        raise Exception(
+            f"Can only go to {tuple(graph[state].keys())} from {state},"
+            f"not {current_symbol}"
         )
-
-    # consider the last stage. what pattern describes the sequence of strategies for that stage?
-    # we're calling that pattern next_stages (there's only one for now, but that's okay)
-    # take the penultimate stage. given that next_stages are a fixed string,
-    # what pattern describes the sequence of trying strategies and trying the next stages?
-    @metatest_logger.logged
-    def stages_recurser(stages: List[List[str]]) -> str:
-        if len(stages) == 1:
-            return strategy_recurser(stages[0], "")
-        return strategy_recurser(stages[0], stages_recurser(stages[1:]))
-
-    return stages_recurser(stages_strategy_names)
+    return walk_graph(next_symbols, next_state, graph, trace)
+    # turn this into something reducable so it doesn't clog the call stack in pdb
 
 
-# the code tries each strategy until one of them works, then goes to the next stage,
-# until it gets a final result that works.
-# if a given stratgy for this stage doesn't work it should jump to the next
-
-# if none of the strategies for a given stage work, it should go back to the
-# previous stage and try the next strategy there.
-# does in order until one works.
-
-# as soon as a given strategy for this stage doesn't work, it should jump
-# to the next strategy for this stage without trying the next stages
-PATTERN_DEFINITIONS = {
-    extract_info.Flags.correct: {
-        # try current strategy; if it doesn't work, next strategy. if it does,
-        # next stage. however, the next stage might fail, then next strategy
-        "continuation_rule": (
-            "{strategy}\n"
-            "({next_stages}|{next_strategies}|{next_stages}{next_strategies})"
-        ),
-        # in the correct case, we get to every stage
-        "terminal_rule": "{last_strategy}\n{next_stages}",
-    },
-    extract_info.Flags.not_enough: {
-        # we might not get to the next stage but we have to try every strategy
-        "continuation_rule": "{strategy}\n({next_stages})?{next_strategies}",
-        # don't need to go to the next if there isn't a working strategy
-        "terminal_rule": "{last_strategy}\n({next_stages})?",
-    },
-    extract_info.Flags.too_many: {
-        # we just have to try every combination, because "works" is definied as
-        # "has enough items"-- we only check if there are too many at the very end
-        # however, sometimes a strategy might return nothing, and then skipping
-        # to the next strategy makes sense
-        "continuation_rule": "{strategy}\n({next_stages})?{next_strategies}",
-        "terminal_rule": "{last_strategy}\n{next_stages}",
-    },
-}
-
-
-def test_regex_gen():
-    # you can realize that it's wrong and jump to the next
-    # you can continue to the next and have it work
-    # or you can continue to the next and not have it work and need the next thing
-    #
-    verbose_example = """
-                        G1  (   C1    (     R1 (|R2))
-                                      |     C2  R1 (|R2)
-                                      )
-                            |   G2 C1 (     R1 (|R2)
-                                      |     C2 R1 (|R2)
-                                      )
-                            )
-                      """
-    example = re.sub("(1|2)", r"\1\n", re.sub(r"\s", "", verbose_example))
-    actual = regex_gen(
-        [["G1", "G2"], ["C1", "C2"], ["R1", "R2"]],
-        **PATTERN_DEFINITIONS[extract_info.Flags.correct],
-    )
-
-
-Entry = Dict[str, List[str]]
+Entry = Mapping[str, List[str]]
 
 
 def generate_trace_tester() -> Callable[[Entry, str], None]:
-    stages_strategy_names: List[List[str]] = [
-        [strategy.__name__ for strategy in step] for step in STAGES
+    strategies: List[List[str]] = [
+        [""] + [strategy.__name__ for strategy in stage] for stage in STAGES
     ]
-
-    metatest_logger = utils.Logger(log_name="metatest")
-
-    patterns = {
-        exit_type: regex_gen(stages_strategy_names, **definition)
-        for exit_type, definition in PATTERN_DEFINITIONS.items()
+    graph: Graph = {
+        state: transitions for state, transitions in generate_graph(strategies)
     }
-
-    # no rest for the test-driven wicked
-    regex_gen_pattern = (
-        "stages_recurser\n" * len(STAGES)
-        + "strategy_recurser\n" * sum(map(len, STAGES))
-    ) * len(PATTERN_DEFINITIONS)
-    assert re.match(regex_gen_pattern, metatest_logger.get_log()) is not None
+    initial_state = (0,) * len(STAGES)
+    final_state = tuple(map(len, STAGES))
 
     def trace_tester(result: Entry, trace: str) -> None:
         name_limits: Tuple[int, int] = extract_info.min_max_names(
             result["emails"], result["phones"]
         )
         exit_type = extract_info.decide_exit_type(result["names"], *name_limits)
-        assert re.fullmatch(patterns[exit_type], trace)
+        exit_state = walk_graph(trace.split(), initial_state, graph, trace)
+        if 0 in exit_state:
+            # we must have skipped the refiners
+            assert exit_type == extract_info.Flags.not_enough
+        elif exit_state is final_state:
+            assert exit_type == extract_info.Flags.too_many
 
     return trace_tester
 
@@ -189,5 +150,3 @@ def test_examples(
                 assert actual == example
             else:
                 raise pytest.xfail("output still the same as known wrong output")
-    # could try reclassifying everything in case something is falsely
-    # marked as wrong
