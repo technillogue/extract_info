@@ -153,7 +153,6 @@ STAGES: Tuple[Extractors, Extractors, Refiners] = (
     REFINERS,
 )
 
-
 def extract_names(
     text: str,
     min_names: int,
@@ -163,8 +162,13 @@ def extract_names(
     google_extractors, crude_extractors, refiners = stages
 
     def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
-        yield from (attempt for attempt in attempts if len(attempt) >= min_names)
-        yield []
+        yielded_anything = False
+        for attempt in attempts:
+            if len(attempt) >= min_names:
+                yielded_anything = True
+                yield attempt
+        if not yielded_anything:        
+            yield []
 
     google_extractions: Iterator[Names] = filter_min_criteria(
         extractor(text) for extractor in google_extractors
@@ -174,19 +178,20 @@ def extract_names(
         for google_extraction in google_extractions
         for crude_extraction in filter_min_criteria(
             extractor(text) for extractor in crude_extractors
-        )
+        ) 
     )
     refinements, fallback = tee(
         refine(consensus) for consensus in consensuses for refine in refiners
     )
     try:
-        return next(
+        names = next(
             refinement
             for refinement in refinements
             if min_names <= len(refinement) <= max_names
         )
+        return names
     except StopIteration:
-        every_refinement = list(fallback)  # note: this has a bunch of [] at the end
+        every_refinement = list(fallback)  # note: this may have a bunch of [] at the end
         if max(map(len, every_refinement)) < min_names:
             return max(every_refinement, key=len)
         return min(
