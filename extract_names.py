@@ -10,8 +10,9 @@ NameAttempts = Iterator[Names]
 
 
 def contains_nonlatin(text: str) -> bool:
-    return not any(map(string.printable.__contains__, text))
+    return not all(map(string.printable.__contains__, text))
     # .84usec faster pcall than using a comprehension
+    # read as "not all of the characters are in the ASCII set"
 
 
 @cache.with_cache
