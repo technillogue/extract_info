@@ -23,8 +23,8 @@ def test_fuzzy_intersect() -> None:
     cases: Sequence[Sequence[List[str]]] = [
         (["Bob", "Miller"], ["Miller"], ["Miller"]),
         (["Deadham", "Bob"], ["Bob Miller"], ["Bob Miller"]),
-        ([], ["Bob"], ["Bob"]),
-        (["Bob"], [], ["Bob"]),
+        ([], ["Bob"], ["Bob"]), #type: ignore
+        (["Bob"], [], ["Bob"]), #type: ignore
         (
             ["Ariel Kochi", "Pierre Kochi"],
             ["Ariel", "Kochi", "TO", "Pierre", "Kochi", "Marion"],
@@ -40,6 +40,7 @@ LINE = "12/31 -- Lisa balloon drop -- off 617.555.5555 - paid, check deposited"
 
 @pytest.mark.usefixtures("save_cache")
 def test_no_google() -> None:
+    # LINE happens to never have any results from Google
     actual = extract_names.extract_names(LINE, 1, 1)
     expected = ["Lisa"]
     if actual != expected:

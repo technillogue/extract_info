@@ -21,7 +21,15 @@ Graph = Mapping[State, Mapping[str, State]]
 def generate_graph(
     strategies: List[List[str]]
 ) -> Iterable[Tuple[State, Mapping[str, State]]]:
-    "Yield a graph describing valid transitions between combinations of strategies"
+    """
+    Yield a graph describing valid transitions between combinations of strategies.
+
+    extract_names.extract_names tries strategies in a way that corresponds to a
+    Finate State Automata. At a given combination of strategies for each stage,
+    it can either try the first strategy of the next stage, the next strategy of this
+    stage, or, if this is the last strategy, can go to the next strategy of the
+    previous stage.
+    """
     # state[i] is an index of strategies[i]
     states = product(*(range(len(stage)) for stage in strategies))
     # zeros cannot be followed by zeros, we can't have started stage n+1 but not n
@@ -38,7 +46,7 @@ def generate_graph(
         if 0 in state:
             incremented_stage = state.index(0) - 1
             # can't skip if there isn't a previous stage to increment
-            # not if that stage has run out
+            # nor if the previous stage has run out
             if (
                 incremented_stage >= 0
                 and len(strategies[incremented_stage]) > state[incremented_stage] + 1
@@ -70,6 +78,7 @@ def test_generate_graph() -> None:
     }
     assert actual == expected
 
+
 # it's usually inconvenient to `up` all the way through the path; pdb++ hides this
 @pdb.hideframe
 def walk_graph(symbols: List[str], state: State, graph: Graph, trace: str) -> State:
@@ -84,13 +93,16 @@ def walk_graph(symbols: List[str], state: State, graph: Graph, trace: str) -> St
             f"not {current_symbol}"
         )
     return walk_graph(next_symbols, next_state, graph, trace)
-    # turn this into something reducable so it doesn't clog the call stack in pdb
 
 
 Entry = Mapping[str, List[str]]
 
 
 def generate_trace_tester() -> Callable[[Entry, str], None]:
+    """
+    Generate a function that uses the transition graph to test whether the trace
+    was valid, and whether the last state agrees with the exit_type
+    """
     strategies: List[List[str]] = [
         [""] + [strategy.__name__ for strategy in stage] for stage in STAGES
     ]
@@ -151,4 +163,4 @@ def test_examples(
             if correct:
                 assert actual == example
             else:
-                raise pytest.xfail("output still the same as known wrong output")
+                pytest.xfail("output still the same as known wrong output")

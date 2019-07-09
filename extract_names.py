@@ -123,6 +123,7 @@ def remove_synonyms(names: Names) -> Names:
         name
         for name in names
         if not any(len(wordnet.synsets(word)) > 1 for word in name.split())
+        # note: will have synonyms for e.g. David (various dictionary-worthy Davids)
     ]
 
 
@@ -134,7 +135,6 @@ def remove_nonlatin(names: Names) -> Names:
 
 def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
-
 
 Refiners = Sequence[Callable[[Names], Names]]
 
@@ -153,6 +153,7 @@ STAGES: Tuple[Extractors, Extractors, Refiners] = (
     REFINERS,
 )
 
+
 def extract_names(
     text: str,
     min_names: int,
@@ -167,7 +168,7 @@ def extract_names(
             if len(attempt) >= min_names:
                 yielded_anything = True
                 yield attempt
-        if not yielded_anything:        
+        if not yielded_anything:
             yield []
 
     google_extractions: Iterator[Names] = filter_min_criteria(
@@ -178,20 +179,21 @@ def extract_names(
         for google_extraction in google_extractions
         for crude_extraction in filter_min_criteria(
             extractor(text) for extractor in crude_extractors
-        ) 
+        )
     )
     refinements, fallback = tee(
         refine(consensus) for consensus in consensuses for refine in refiners
     )
     try:
-        names = next(
+        return next(
             refinement
             for refinement in refinements
             if min_names <= len(refinement) <= max_names
         )
-        return names
     except StopIteration:
-        every_refinement = list(fallback)  # note: this may have a bunch of [] at the end
+        every_refinement = list(
+            fallback
+        )  # note: this may have a bunch of [] at the end
         if max(map(len, every_refinement)) < min_names:
             return max(every_refinement, key=len)
         return min(
