@@ -1,6 +1,7 @@
 # mypy: disallow_untyped_decorators=False
 from typing import Mapping, List, Any, Tuple, Callable, Sequence, Iterable
 from itertools import product
+import pdb
 import pytest
 import extract_info
 import extract_names
@@ -56,8 +57,8 @@ def generate_graph(
         yield (state, {step_symbol: step_state})
 
 
-def test_generate_graph():
-    strategies = [["a", "A"], ["b", "B"]]
+def test_generate_graph() -> None:
+    strategies = [["", "a", "A"], ["", "b", "B"]]
     actual = {state: transition for state, transition in generate_graph(strategies)}
     expected = {
         (0, 0): {"a": (1, 0)},
@@ -69,7 +70,8 @@ def test_generate_graph():
     }
     assert actual == expected
 
-
+# it's usually inconvenient to `up` all the way through the path; pdb++ hides this
+@pdb.hideframe
 def walk_graph(symbols: List[str], state: State, graph: Graph, trace: str) -> State:
     if not symbols:
         return state
