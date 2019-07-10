@@ -169,9 +169,3 @@ correct: 90.95%, not enough: 9.05%, too many: 0.00% [retroactive]
 # fixing tricky bug, rewrote test_extract_info, fixed contains_nonlatin bug, 
 # finally fixed elusive trace bug caused by filter_min_criteria
 # correct: 93.58%. too many: 3.31%. not enough: 3.11%. multiple contains: 13.46%
-
-# reorganized everything and changed flags
-# correct: 93.58%. too many: 3.31%. not enough: 3.11%. multiple contains: 13.46%
-
-# rewrote fuzzy_intersect
-# correct: 93.58%. too many: 3.31%. not enough: 3.11%. multiple contains: 13.46%

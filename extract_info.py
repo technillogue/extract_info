@@ -2,9 +2,11 @@ from __future__ import division
 import sys
 import csv
 import argparse
+import re
 from enum import Enum
 from itertools import zip_longest, tee
-from typing import List, Mapping, Tuple, Sequence, Iterator, Any
+from typing import List, Mapping, Tuple, Sequence, Iterator, IO, Any
+from phonenumbers import PhoneNumberMatcher, format_number, PhoneNumberFormat
 from strategies import Stages, STAGES
 from cache import cache
 from helpers import extract_contacts, space_dashes
@@ -12,6 +14,28 @@ from helpers import extract_contacts, space_dashes
 Names = List[str]
 NameAttempts = Iterator[Names]
 Entry = Mapping[str, Names]
+
+
+EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+")
+
+
+def extract_contacts(line: str) -> Tuple[List[str], List[str]]:
+    emails = EMAIL_RE.findall(line)
+    phones = [
+        format_number(match.number, PhoneNumberFormat.INTERNATIONAL)
+        for match in PhoneNumberMatcher(line, "US")
+    ]
+    return emails, phones
+
+
+def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
+    contact_counts: Tuple[int, int] = (len(emails), len(phones))
+    # if there's 1 email and 3 phones, min_names should be 1
+    # but if there's 0 email and 1 phone, it should be 1, not 0
+    min_names: int = max(1, min(contact_counts))
+    max_names: int = max(contact_counts)
+    # maybe add min, likely_max, absolute_max to distingish max vs sum?
+    return (min_names, max_names)
 
 
 def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names:
@@ -72,34 +96,21 @@ def extract_names(
             extractor(text) for extractor in crude_extractors
         )
     )
-    refinements, fallback = tee(
-        refine(consensus) for consensus in consensuses for refine in refiners
+    refinements = (
+        refine(consensus)
+        for consensus in consensuses
+        for refine in refiners
+        if min_names <= len(refinement) <= max_names
     )
     try:
-        return next(
-            refinement
-            for refinement in refinements
-            if min_names <= len(refinement) <= max_names
-        )
+        return next(refinements)
     except StopIteration:
-        every_refinement = list(
-            fallback
-        )  # note: this may have a bunch of [] at the end
-        if max(map(len, every_refinement)) < min_names:
-            return max(every_refinement, key=len)
-        return min(
-            filter(None, every_refinement), key=len, default=list()
-        )  # smallest non-empty but [] if they're all empty
+        return []
 
 
-def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
-    contact_counts: Tuple[int, int] = (len(emails), len(phones))
-    # if there's 1 email and 3 phones, min_names should be 1
-    # but if there's 0 email and 1 phone, it should be 1, not 0
-    min_names: int = max(1, min(contact_counts))
-    max_names: int = max(contact_counts)
-    # maybe add min, likely_max, absolute_max to distingish max vs sum?
-    return (min_names, max_names)
+def space_dashes(text: str) -> str:
+    """Put spaces around dashes without spaces."""
+    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
 
 
 def extract_info(raw_line: str, **extract_names_kwargs: Any) -> Mapping[str, List[str]]:
@@ -116,26 +127,20 @@ def extract_info(raw_line: str, **extract_names_kwargs: Any) -> Mapping[str, Lis
     return {"line": [line], "emails": emails, "phones": phones, "names": names}
 
 
-def save_entries(entries: Sequence[Entry], fname: str) -> None:
-    header = ["line", "emails", "phones", "names"]
-    with open(fname, "w", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        for entry in entries:
-            contact_infos = [entry[heading] for heading in header]
-            contacts = zip_longest(*contact_infos, fillvalue="")
-            for contact in contacts:
-                writer.writerow(list(contact))
+def save_entries(entries: Sequence[Entry], out_file: IO) -> None:
+    writer = csv.writer(out_file)
+    writer.writerow(entries[0].keys())
+    for entry in entries:
+        contacts = zip_longest(*entry.values(), fillvalue="")
+        for contact in contacts:
+            writer.writerow(list(contact))
 
 
 class EntryType(str, Enum):
     correct = "correct"
     too_many = "too many"
     not_enough = "not enough"
-    multiple_contacts = "multiple contacts"
-    one_contact = "one_contact"
     all = "all"
-    skipped = "skipped"
 
     def __str__(self) -> str:
         return self.value
@@ -144,17 +149,13 @@ class EntryType(str, Enum):
 def decide_entry_type(entry: Entry) -> Sequence[EntryType]:
     min_names, max_names = min_max_names(entry["emails"], entry["phones"])
     if not max_names:
-        return (EntryType.skipped,)
-    entry_types = (
-        EntryType.all,
-        (EntryType.one_contact if max_names == 1 else EntryType.multiple_contacts),
-    )
+        return tuple()
     names_count = len(entry["names"])
     if names_count <= max_names:
         if names_count < min_names:
-            return entry_types + (EntryType.not_enough,)
-        return entry_types + (EntryType.correct,)
-    return entry_types + (EntryType.too_many,)
+            return (EntryType.all, EntryType.not_enough)
+        return (EntryType.all, EntryType.correct)
+    return (EntryType.all, EntryType.too_many)
 
 
 def analyze_metrics(entries: List[Entry]) -> Tuple[Mapping, Mapping]:
@@ -168,26 +169,21 @@ def analyze_metrics(entries: List[Entry]) -> Tuple[Mapping, Mapping]:
         for entry_type_being_found in EntryType
     }
     counts = dict(zip(entries_by_type.keys(), map(len, entries_by_type.values())))
-    for entry_type in list(EntryType)[:4]:
-        print(
-            "{}: {:.2%}. ".format(
-                entry_type, counts[entry_type] / counts[EntryType.all]
-            ),
-            end="",
-        )
+    for entry_type in list(EntryType):
+        fraction = counts[entry_type] / counts[EntryType.all]
+        print(  "{}: {:.2%}. ".format(entry_type, fraction)
+        print(metric, end="")
     print()
     return (entries_by_type, counts)
 
 
 def main() -> Tuple[Mapping, Mapping]:
-    parser = argparse.ArgumentParser("extract names and contact info from csv")
-    parser.add_argument("-i", "--input", default="data/trello.csv")
-    parser.add_argument("-o", "--output", default="data/info.csv")
-    args = parser.parse_args()
-    lines = list(csv.reader(open(args.input, encoding="utf-8")))[1:]
+    with open("data/trello.csv", encoding="utf-8") as in_file:
+        lines = list(csv.reader(in_file))[1:]
     with cache:
         entries = [extract_info(line[0]) for line in lines]
-    save_entries(entries, args.output)
+    with open("data/info.csv", "w", encoding="utf-8") as out_file:
+        save_entries(entries, args.output)
     return analyze_metrics(entries)
 
 
