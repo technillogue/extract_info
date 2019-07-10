@@ -95,13 +95,14 @@ def extract_names(
         )
     )
     refinements = (
-        refine(consensus)
-        for consensus in consensuses
-        for refine in refiners
-        if min_names <= len(refine(consensus)) <= max_names
+        refine(consensus) for consensus in consensuses for refine in refiners
     )
     try:
-        return next(refinements)
+        return next(
+            refinement
+            for refinement in refinements
+            if min_names <= len(refinement) <= max_names
+        )
     except StopIteration:
         return []
 
@@ -136,8 +137,7 @@ def save_entries(entries: Sequence[Entry], out_file: IO) -> None:
 
 class EntryType(str, Enum):
     correct = "correct"
-    too_many = "too many"
-    not_enough = "not enough"
+    incorrect = "incorrect"
     all = "all"
 
     def __str__(self) -> str:
@@ -148,12 +148,9 @@ def decide_entry_type(entry: Entry) -> Sequence[EntryType]:
     min_names, max_names = min_max_names(entry["emails"], entry["phones"])
     if not max_names:
         return tuple()
-    names_count = len(entry["names"])
-    if names_count <= max_names:
-        if names_count < min_names:
-            return (EntryType.all, EntryType.not_enough)
+    if min_names <= len(entry["names"]) <= max_names:
         return (EntryType.all, EntryType.correct)
-    return (EntryType.all, EntryType.too_many)
+    return (EntryType.all, EntryType.incorrect)
 
 
 def analyze_metrics(entries: List[Entry]) -> Tuple[Mapping, Mapping]:

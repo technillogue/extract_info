@@ -116,19 +116,15 @@ def trace_extract_info() -> Callable:
     stages = tuple([logger.logged(strategy) for strategy in stage] for stage in STAGES)
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
+        print(strategy_names)
         logger.new_stream()
         result = extract_info(*args, stages=stages, **kwargs)
         entry_types = decide_entry_type(result)
         trace = logger.stream.getvalue()
         exit_state = walk_graph(trace.split(), initial_state, graph)
-        if 0 in exit_state:
-            # we must have skipped the refiners
-            assert EntryType.not_enough in entry_types
-        elif exit_state is final_state:
-            assert EntryType.too_many in entry_types
-
+        if 0 in exit_state or exit_state is final_state:
+            assert EntryType.incorrect in entry_types
         return result
-
     return traced_extract_info
 
 

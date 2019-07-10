@@ -8,11 +8,11 @@ from test_integration import generate_graph
 
 number_of_limbs_owed_to_google: int
 
-
 def test_cache() -> None:
     # pylint: disable=global-statement
     global number_of_limbs_owed_to_google
     number_of_limbs_owed_to_google = 0
+
     cache.clear_cache("machine_learning_powered_echo")
 
     @cache.with_cache
@@ -72,26 +72,11 @@ def test_fuzzy_intersect() -> None:
 LINE = "12/31 -- Lisa balloon drop -- off 617.555.5555 - paid, check deposited"
 
 
-@pytest.mark.usefixtures("save_cache")
 def test_no_google() -> None:
     # LINE happens to never have any results from Google
     actual = extract_info.extract_names(LINE, 1, 1)
     expected = ["Lisa"]
     assert actual == expected
-
-
-@pytest.mark.usefixtures("save_cache")
-def test_too_many(monkeypatch: Any) -> None:
-    def mock_fuzzy_intersect(*_dummy: Any) -> List[str]:
-        return ["Stephanie", "red", "Собака", "Ariel", "Lisa"]
-
-    monkeypatch.setattr(extract_info, "fuzzy_intersect", mock_fuzzy_intersect)
-    actual = extract_info.extract_names(LINE, 1, 1)
-    assert actual  # return the best attempt, not nothing
-    assert actual == ["Stephanie", "Ariel", "Lisa"]
-    assert extract_info.EntryType.too_many in extract_info.decide_entry_type(
-        extract_info.extract_info(LINE)
-    )
 
 
 def test_generate_graph() -> None:
