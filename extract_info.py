@@ -1,15 +1,13 @@
 from __future__ import division
 import sys
 import csv
-import argparse
 import re
 from enum import Enum
-from itertools import zip_longest, tee
+from itertools import zip_longest
 from typing import List, Mapping, Tuple, Sequence, Iterator, IO, Any
 from phonenumbers import PhoneNumberMatcher, format_number, PhoneNumberFormat
 from strategies import Stages, STAGES
 from cache import cache
-from helpers import extract_contacts, space_dashes
 
 Names = List[str]
 NameAttempts = Iterator[Names]
@@ -100,7 +98,7 @@ def extract_names(
         refine(consensus)
         for consensus in consensuses
         for refine in refiners
-        if min_names <= len(refinement) <= max_names
+        if min_names <= len(refine(consensus)) <= max_names
     )
     try:
         return next(refinements)
@@ -171,8 +169,7 @@ def analyze_metrics(entries: List[Entry]) -> Tuple[Mapping, Mapping]:
     counts = dict(zip(entries_by_type.keys(), map(len, entries_by_type.values())))
     for entry_type in list(EntryType):
         fraction = counts[entry_type] / counts[EntryType.all]
-        print(  "{}: {:.2%}. ".format(entry_type, fraction)
-        print(metric, end="")
+        print("{}: {:.2%}. ".format(entry_type, fraction), end="")
     print()
     return (entries_by_type, counts)
 
@@ -183,7 +180,7 @@ def main() -> Tuple[Mapping, Mapping]:
     with cache:
         entries = [extract_info(line[0]) for line in lines]
     with open("data/info.csv", "w", encoding="utf-8") as out_file:
-        save_entries(entries, args.output)
+        save_entries(entries, out_file)
     return analyze_metrics(entries)
 
 

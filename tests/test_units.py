@@ -4,6 +4,7 @@ import pytest
 import strategies
 import extract_info
 from cache import cache
+from test_integration import generate_graph
 
 number_of_limbs_owed_to_google: int
 
@@ -91,3 +92,17 @@ def test_too_many(monkeypatch: Any) -> None:
     assert extract_info.EntryType.too_many in extract_info.decide_entry_type(
         extract_info.extract_info(LINE)
     )
+
+
+def test_generate_graph() -> None:
+    graph = generate_graph([["", "a", "A"], ["", "b", "B"]])
+    actual = {state: transition for state, transition in graph}
+    expected = {
+        (0, 0): {"a": (1, 0)},
+        (1, 0): {"b": (1, 1), "A": (2, 0)},
+        (1, 1): {"B": (1, 2)},
+        (1, 2): {"A": (2, 0)},
+        (2, 0): {"b": (2, 1)},
+        (2, 1): {"B": (2, 2)},
+    }
+    assert actual == expected

@@ -2,15 +2,15 @@
 import logging
 import io
 import pdb
+import json
 from itertools import product
 from functools import wraps
 from typing import Mapping, List, Any, Tuple, Callable, Sequence, Iterable
 import pytest
 import strategies
+from cache import cache
 from extract_info import extract_info, decide_entry_type, EntryType
-from tools import reclassify, LABELED_EXAMPLES
 
-# NOTE: for reclassification to work, use pytest with --capture=sys
 
 State = Tuple[int, ...]
 Graph = Mapping[State, Mapping[str, State]]
@@ -132,9 +132,20 @@ def trace_extract_info() -> Callable:
     return traced_extract_info
 
 
+LABELED_EXAMPLES: List[Tuple[Entry, bool]] = [
+    (example, True) for example in json.load(open("data/examples.json"))
+] + [(example, False) for example in json.load(open("data/counterexamples.json"))]
+
+
 @pytest.fixture(name="labeled_example", params=LABELED_EXAMPLES)
 def labeled_example_fixture(request: Any) -> Entry:
     return request.param
+
+
+@pytest.fixture
+def save_cache() -> Iterable[None]:
+    with cache:
+        yield
 
 
 @pytest.mark.usefixtures("save_cache")
@@ -143,14 +154,9 @@ def test_examples(
 ) -> None:
     example, correct = labeled_example
     line = example["line"][0]
-    try:
-        actual = traced_extract_info(line)
-    except AssertionError as e:
-        raise e
-    if actual != example:
-        really_correct = reclassify(actual, example)
-        if not really_correct:
-            if correct:
-                assert actual == example
-            else:
-                pytest.xfail("output still the same as known wrong output")
+    actual = traced_extract_info(line)
+    if correct:
+        assert actual == example
+    else:
+        if actual != example:
+            pytest.xfail("output still the same as known wrong output")
