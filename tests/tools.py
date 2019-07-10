@@ -4,7 +4,7 @@ import os
 from functools import wraps
 from itertools import tee
 from typing import Mapping, List, Iterable, Tuple, Callable, Any, Dict
-import extract_names
+import strategies
 
 Entry = Mapping[str, List[str]]
 EXAMPLES_FNAME = "data/examples.json"
@@ -68,7 +68,7 @@ def reclassify(actual: Entry, example: Entry) -> bool:
 def show_all_extractions(text: str) -> List[List[List[str]]]:
     return [
         [extractor(text) for extractor in extractors]
-        for extractors in extract_names.STAGES[:2]
+        for extractors in strategies.STAGES[:2]
     ]
 
 

@@ -4,6 +4,7 @@ import io
 from typing import Any, Callable
 import pytest
 import tools
+import test_integration
 
 
 class Entry(dict):
@@ -69,3 +70,19 @@ def test_reclassify(monkeypatch: Any, capfd: Any, send: Callable) -> None:
         out = capfd.readouterr().out
         for part in correct_response:
             assert part in out
+
+
+def test_generate_graph() -> None:
+    strategies = [["", "a", "A"], ["", "b", "B"]]
+    graph_iterator = test_integration.generate_graph(strategies)
+    actual = {state: transition for state, transition in graph_iterator}
+    expected = {
+        (0, 0): {"a": (1, 0)},
+        (1, 0): {"b": (1, 1), "A": (2, 0)},
+        (1, 1): {"B": (1, 2)},
+        (1, 2): {"A": (2, 0)},
+        (2, 0): {"b": (2, 1)},
+        (2, 1): {"B": (2, 2)},
+    }
+    assert actual == expected
+

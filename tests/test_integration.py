@@ -1,37 +1,39 @@
 # mypy: disallow_untyped_decorators=False
-from typing import Mapping, List, Any, Tuple, Callable, Sequence, Iterable
-from itertools import product
+import logging
+import io
 import pdb
+from itertools import product
+from functools import wraps
+from typing import Mapping, List, Any, Tuple, Callable, Sequence, Iterable
 import pytest
-import extract_info
-import extract_names
-import utils
+import strategies
+from extract_info import extract_info, decide_entry_type, EntryType
 from tools import reclassify, LABELED_EXAMPLES
 
 # NOTE: for reclassification to work, use pytest with --capture=sys
 
-STAGES: Sequence[Sequence[Callable]] = extract_names.STAGES
+State = Tuple[int, ...]
+Graph = Mapping[State, Mapping[str, State]]
+Entry = Mapping[str, List[str]]
+STAGES: Sequence[Sequence[Callable]] = strategies.STAGES
 # the original annotation is more specific, but we just care that
 # they're callables here
 
-State = Tuple[int, ...]
-Graph = Mapping[State, Mapping[str, State]]
-
 
 def generate_graph(
-    strategies: List[List[str]]
+    stages: List[List[str]]
 ) -> Iterable[Tuple[State, Mapping[str, State]]]:
     """
     Yield a graph describing valid transitions between combinations of strategies.
 
-    extract_names.extract_names tries strategies in a way that corresponds to a
+    extract_info.extract_names tries strategies in a way that corresponds to a
     Finate State Automata. At a given combination of strategies for each stage,
     it can either try the first strategy of the next stage, the next strategy of this
     stage, or, if this is the last strategy, can go to the next strategy of the
     previous stage.
     """
     # state[i] is an index of strategies[i]
-    states = product(*(range(len(stage)) for stage in strategies))
+    states = product(*(range(len(stage)) for stage in stages))
     # zeros cannot be followed by zeros, we can't have started stage n+1 but not n
     valid_states = [
         state for state in states if not (0 in state and any(state[state.index(0) :]))
@@ -42,18 +44,16 @@ def generate_graph(
             for index, strategy in enumerate(state)
             if step_state[index] is not strategy
         ][0]
-        step_symbol = strategies[first_change][step_state[first_change]]
+        step_symbol = stages[first_change][step_state[first_change]]
         if 0 in state:
             incremented_stage = state.index(0) - 1
             # can't skip if there isn't a previous stage to increment
             # nor if the previous stage has run out
             if (
                 incremented_stage >= 0
-                and len(strategies[incremented_stage]) > state[incremented_stage] + 1
+                and len(stages[incremented_stage]) > state[incremented_stage] + 1
             ):
-                skip_symbol = strategies[incremented_stage][
-                    state[incremented_stage] + 1
-                ]
+                skip_symbol = stages[incremented_stage][state[incremented_stage] + 1]
                 skip_state = tuple(
                     {incremented_stage: strategy + 1, incremented_stage + 1: 0}.get(
                         stage, strategy
@@ -65,23 +65,9 @@ def generate_graph(
         yield (state, {step_symbol: step_state})
 
 
-def test_generate_graph() -> None:
-    strategies = [["", "a", "A"], ["", "b", "B"]]
-    actual = {state: transition for state, transition in generate_graph(strategies)}
-    expected = {
-        (0, 0): {"a": (1, 0)},
-        (1, 0): {"b": (1, 1), "A": (2, 0)},
-        (1, 1): {"B": (1, 2)},
-        (1, 2): {"A": (2, 0)},
-        (2, 0): {"b": (2, 1)},
-        (2, 1): {"B": (2, 2)},
-    }
-    assert actual == expected
-
-
 # it's usually inconvenient to `up` all the way through the path; pdb++ hides this
-@pdb.hideframe
-def walk_graph(symbols: List[str], state: State, graph: Graph, trace: str) -> State:
+@pdb.hideframe  # type: ignore # mypy doesn't see pdb++
+def walk_graph(symbols: List[str], state: State, graph: Graph) -> State:
     if not symbols:
         return state
     current_symbol, *next_symbols = symbols
@@ -92,51 +78,55 @@ def walk_graph(symbols: List[str], state: State, graph: Graph, trace: str) -> St
             f"Can only go to {tuple(graph[state].keys())} from {state},"
             f"not {current_symbol}"
         )
-    return walk_graph(next_symbols, next_state, graph, trace)
+    return walk_graph(next_symbols, next_state, graph)
 
 
-Entry = Mapping[str, List[str]]
+class Logger:
+    def __init__(self, log_name: str = "trace"):
+        self.log = logging.getLogger(log_name)
+        self.log.setLevel("DEBUG")
+        self.new_stream()
 
+    def logged(self, func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            self.log.debug(func.__name__)
+            return func(*args, **kwargs)
 
-def generate_trace_tester() -> Callable[[Entry, str], None]:
-    """
-    Generate a function that uses the transition graph to test whether the trace
-    was valid, and whether the last state agrees with the exit_type
-    """
-    strategies: List[List[str]] = [
-        [""] + [strategy.__name__ for strategy in stage] for stage in STAGES
-    ]
-    graph: Graph = {
-        state: transitions for state, transitions in generate_graph(strategies)
-    }
-    initial_state = (0,) * len(STAGES)
-    final_state = tuple(map(len, STAGES))
+        return wrapper
 
-    def trace_tester(result: Entry, trace: str) -> None:
-        name_limits: Tuple[int, int] = extract_info.min_max_names(
-            result["emails"], result["phones"]
-        )
-        exit_type = extract_info.decide_exit_type(result["names"], *name_limits)
-        exit_state = walk_graph(trace.split(), initial_state, graph, trace)
-        if 0 in exit_state:
-            # we must have skipped the refiners
-            assert exit_type == extract_info.Flags.not_enough
-        elif exit_state is final_state:
-            assert exit_type == extract_info.Flags.too_many
-
-    return trace_tester
+    def new_stream(self) -> None:
+        for handler in self.log.handlers:
+            self.log.removeHandler(handler)
+        self.stream = io.StringIO()
+        self.log.addHandler(logging.StreamHandler(self.stream))
 
 
 @pytest.fixture(name="traced_extract_info")
 def trace_extract_info() -> Callable:
-    logger = utils.Logger()
+    strategy_names: List[List[str]] = [
+        [""] + [strategy.__name__ for strategy in stage] for stage in STAGES
+    ]
+    graph: Graph = {
+        state: transitions for state, transitions in generate_graph(strategy_names)
+    }
+    initial_state = (0,) * len(STAGES)
+    final_state = tuple(map(len, STAGES))
+    logger = Logger()
     stages = tuple([logger.logged(strategy) for strategy in stage] for stage in STAGES)
-    test_trace = generate_trace_tester()
 
     def traced_extract_info(*args: Any, **kwargs: Any) -> Any:
         logger.new_stream()
-        result = extract_info.extract_info(*args, stages=stages, **kwargs)
-        test_trace(result, logger.get_log())
+        result = extract_info(*args, stages=stages, **kwargs)
+        entry_types = decide_entry_type(result)
+        trace = logger.stream.getvalue()
+        exit_state = walk_graph(trace.split(), initial_state, graph)
+        if 0 in exit_state:
+            # we must have skipped the refiners
+            assert EntryType.not_enough in entry_types
+        elif exit_state is final_state:
+            assert EntryType.too_many in entry_types
+
         return result
 
     return traced_extract_info

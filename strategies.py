@@ -1,12 +1,43 @@
 import string
-from itertools import combinations, filterfalse, tee
+from itertools import combinations, filterfalse
 from functools import reduce
-from typing import List, Callable, Iterator, Sequence, Tuple
-import google_analyze
-from utils import cache, compose
+from typing import List, Callable, Sequence, Tuple, TypeVar
+from typing_extensions import Protocol, runtime_checkable
+import googleapiclient.discovery
+from googleapiclient.errors import HttpError
+from cache import cache
+
+X = TypeVar("X")
+Y = TypeVar("Y")
+Z = TypeVar("Z")
+
+
+@runtime_checkable
+class Wrapper(Protocol):
+    __wrapped__: Callable
+
+
+def compose(f: Callable[[Y], Z], g: Callable[[X], Y]) -> Callable[[X], Z]:
+    use_cache = False
+    if isinstance(f, Wrapper):
+        f = f.__wrapped__
+        use_cache = True
+    if isinstance(g, Wrapper):
+        g = g.__wrapped__
+        use_cache = True
+
+    def composed_function(arg: X) -> Z:
+        return f(g(arg))
+
+    composed_function.__name__ = composed_function.__qualname__ = "_".join(
+        (f.__name__, g.__name__)
+    )
+    if use_cache:
+        return cache.with_cache(composed_function)
+    return composed_function
+
 
 Names = List[str]
-NameAttempts = Iterator[Names]
 
 
 def contains_nonlatin(text: str) -> bool:
@@ -48,10 +79,24 @@ CRUDE_EXTRACTORS: Extractors = [nltk_extract_names, all_capitalized_extract_name
 
 
 @cache.with_cache
-def google_extract_names(text: str) -> Names:
+def google_extract_names(raw_text: str) -> Names:
     "Return names using Google Cloud Knowledge Graph Named Entity Recognition."
-    latin_text = "".join(filter(string.printable.__contains__, text))
-    return google_analyze.extract_entities(latin_text)
+    text = "".join(filter(string.printable.__contains__, raw_text))
+    try:
+        body = {
+            "document": {"type": "PLAIN_TEXT", "content": text},
+            "encoding_type": "UTF32",
+        }
+        service = googleapiclient.discovery.build("language", "v1")
+        request = service.documents().analyzeEntities(  # pylint: disable=no-member
+            body=body
+        )
+        response = request.execute()
+    except HttpError:
+        return []
+    return [
+        entity["name"] for entity in response["entities"] if entity["type"] == "PERSON"
+    ]
 
 
 @cache.with_cache
@@ -85,32 +130,6 @@ GOOGLE_EXTRACTORS: Extractors = [
 ]
 
 
-def partition_similar(name: str, other_names: Names) -> Tuple[Names, Names]:
-    def similar_to(other_name: str) -> bool:
-        return name in other_name or other_name in name
-
-    return (
-        list(filter(similar_to, other_names)),
-        list(filterfalse(similar_to, other_names)),
-    )
-
-
-def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names:
-    if not recursive:
-        if not (left and right):
-            return left or right
-    else:
-        if not left:
-            return []
-    first_left, *remaining_left = left
-    similar_right, dissimilar_right = partition_similar(first_left, right)
-    if similar_right:
-        similar_left, dissimilar_left = partition_similar(first_left, remaining_left)
-        intersection = max(first_left, *similar_left, *similar_right, key=len)
-        return [intersection] + fuzzy_intersect(dissimilar_left, dissimilar_right, True)
-    return fuzzy_intersect(remaining_left, right, True)
-
-
 def remove_none(names: Names) -> Names:
     return names
 
@@ -136,6 +155,7 @@ def remove_nonlatin(names: Names) -> Names:
 def remove_short(names: Names) -> Names:
     return [name for name in names if len(name) > 2]
 
+
 Refiners = Sequence[Callable[[Names], Names]]
 
 UNIQUE_REFINERS: Refiners = [remove_short, remove_synonyms, remove_nonlatin]
@@ -147,55 +167,5 @@ REFINERS: Refiners = [remove_none] + [
     for combination in combinations(UNIQUE_REFINERS, i)
 ]
 
-STAGES: Tuple[Extractors, Extractors, Refiners] = (
-    GOOGLE_EXTRACTORS,
-    CRUDE_EXTRACTORS,
-    REFINERS,
-)
-
-
-def extract_names(
-    text: str,
-    min_names: int,
-    max_names: int,
-    stages: Tuple[Extractors, Extractors, Refiners] = STAGES,
-) -> Names:
-    google_extractors, crude_extractors, refiners = stages
-
-    def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
-        yielded_anything = False
-        for attempt in attempts:
-            if len(attempt) >= min_names:
-                yielded_anything = True
-                yield attempt
-        if not yielded_anything:
-            yield []
-
-    google_extractions: Iterator[Names] = filter_min_criteria(
-        extractor(text) for extractor in google_extractors
-    )
-    consensuses = (
-        fuzzy_intersect(google_extraction, crude_extraction)
-        for google_extraction in google_extractions
-        for crude_extraction in filter_min_criteria(
-            extractor(text) for extractor in crude_extractors
-        )
-    )
-    refinements, fallback = tee(
-        refine(consensus) for consensus in consensuses for refine in refiners
-    )
-    try:
-        return next(
-            refinement
-            for refinement in refinements
-            if min_names <= len(refinement) <= max_names
-        )
-    except StopIteration:
-        every_refinement = list(
-            fallback
-        )  # note: this may have a bunch of [] at the end
-        if max(map(len, every_refinement)) < min_names:
-            return max(every_refinement, key=len)
-        return min(
-            filter(None, every_refinement), key=len, default=list()
-        )  # smallest non-empty but [] if they're all empty
+Stages = Tuple[Extractors, Extractors, Refiners]
+STAGES: Stages = (GOOGLE_EXTRACTORS, CRUDE_EXTRACTORS, REFINERS)

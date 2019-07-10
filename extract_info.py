@@ -1,38 +1,86 @@
 from __future__ import division
 import sys
 import csv
-import re
-from itertools import zip_longest
 import argparse
 from enum import Enum
-from typing import List, Dict, Tuple, Any
-from phonenumbers import PhoneNumberMatcher, format_number, PhoneNumberFormat
-from extract_names import extract_names
-from utils import cache
-
-
-class Flags(str, Enum):
-    correct = "correct"
-    too_many = "too many"
-    not_enough = "not enough"
-    multiple_contacts = "multiple contacts"
-    one_contact = "one_contact"
-    all = "all"
-    skipped = "skipped"
-
-    def __str__(self) -> str:
-        return self.value
-
-
-EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+")
+from itertools import zip_longest, filterfalse, tee
+from typing import List, Mapping, Tuple, Sequence, Iterator, Any
+from strategies import Stages, STAGES
+from cache import cache
+from helpers import extract_contacts, space_dashes
 
 Names = List[str]
-Entry = Dict[str, Names]
+NameAttempts = Iterator[Names]
+Entry = Mapping[str, Names]
 
 
-def space_dashes(text: str) -> str:
-    "Put spaces around dashes without spaces."
-    return re.sub(r"-([^ -])", r"- \1", re.sub(r"([^ -])-", r"\1 -", text))
+def partition_similar(name: str, other_names: Names) -> Tuple[Names, Names]:
+    def similar_to(other_name: str) -> bool:
+        return name in other_name or other_name in name
+
+    return (
+        list(filter(similar_to, other_names)),
+        list(filterfalse(similar_to, other_names)),
+    )
+
+
+def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names:
+    if not recursive:
+        if not (left and right):
+            return left or right
+    else:
+        if not left:
+            return []
+    first_left, *remaining_left = left
+    similar_right, dissimilar_right = partition_similar(first_left, right)
+    if similar_right:
+        similar_left, dissimilar_left = partition_similar(first_left, remaining_left)
+        intersection = max(first_left, *similar_left, *similar_right, key=len)
+        return [intersection] + fuzzy_intersect(dissimilar_left, dissimilar_right, True)
+    return fuzzy_intersect(remaining_left, right, True)
+
+
+def extract_names(
+    text: str, min_names: int, max_names: int, stages: Stages = STAGES
+) -> Names:
+    def filter_min_criteria(attempts: NameAttempts) -> NameAttempts:
+        yielded_anything = False
+        for attempt in attempts:
+            if len(attempt) >= min_names:
+                yielded_anything = True
+                yield attempt
+        if not yielded_anything:
+            yield []
+
+    google_extractors, crude_extractors, refiners = stages
+    google_extractions: Iterator[Names] = filter_min_criteria(
+        extractor(text) for extractor in google_extractors
+    )
+    consensuses = (
+        fuzzy_intersect(google_extraction, crude_extraction)
+        for google_extraction in google_extractions
+        for crude_extraction in filter_min_criteria(
+            extractor(text) for extractor in crude_extractors
+        )
+    )
+    refinements, fallback = tee(
+        refine(consensus) for consensus in consensuses for refine in refiners
+    )
+    try:
+        return next(
+            refinement
+            for refinement in refinements
+            if min_names <= len(refinement) <= max_names
+        )
+    except StopIteration:
+        every_refinement = list(
+            fallback
+        )  # note: this may have a bunch of [] at the end
+        if max(map(len, every_refinement)) < min_names:
+            return max(every_refinement, key=len)
+        return min(
+            filter(None, every_refinement), key=len, default=list()
+        )  # smallest non-empty but [] if they're all empty
 
 
 def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
@@ -45,47 +93,21 @@ def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
     return (min_names, max_names)
 
 
-def decide_exit_type(names: List[str], min_names: int, max_names: int) -> Flags:
-    names_count = len(names)
-    if names_count <= max_names:
-        if names_count < min_names:
-            return Flags.not_enough
-        return Flags.correct
-    return Flags.too_many
-
-
-def extract_info(
-    raw_line: str, flags: bool = False, **extract_names_kwargs: Any
-) -> Dict[str, List[str]]:
-    line: str = raw_line.replace("'", "").replace("\n", "")
-    emails: List[str] = EMAIL_RE.findall(line)
-    phones: List[str] = [
-        format_number(match.number, PhoneNumberFormat.INTERNATIONAL)
-        for match in PhoneNumberMatcher(line, "US")
-    ]
+def extract_info(raw_line: str, **extract_names_kwargs: Any) -> Mapping[str, List[str]]:
+    line = raw_line.replace("'", "").replace("\n", "")
+    emails, phones = extract_contacts(line)
     min_names, max_names = min_max_names(emails, phones)
-    names: List[str]
     if max_names == 0:
         names = ["skipped"]
     else:
         clean_line = space_dashes(line)
         names = extract_names(clean_line, min_names, max_names, **extract_names_kwargs)
-    print(".", end="")
-    sys.stdout.flush()
-    result = {"line": [line], "emails": emails, "phones": phones, "names": names}
-    if flags:
-        if not max_names:
-            result["flags"] = [Flags.skipped]
-            return result
-        result["flags"] = [
-            (Flags.one_contact if max_names == 1 else Flags.multiple_contacts),
-            decide_exit_type(names, min_names, max_names),
-            Flags.all,
-        ]
-    return result
+        print(".", end="")
+        sys.stdout.flush()
+    return {"line": [line], "emails": emails, "phones": phones, "names": names}
 
 
-def save_entries(entries: List[Entry], fname: str) -> None:
+def save_entries(entries: Sequence[Entry], fname: str) -> None:
     header = ["line", "emails", "phones", "names"]
     with open(fname, "w", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -97,28 +119,68 @@ def save_entries(entries: List[Entry], fname: str) -> None:
                 writer.writerow(list(contact))
 
 
-def metrics(entries: List[Entry]) -> Dict:
-    entry_types = {
-        flag: [entry for entry in entries if flag in entry["flags"]] for flag in Flags
+class EntryType(str, Enum):
+    correct = "correct"
+    too_many = "too many"
+    not_enough = "not enough"
+    multiple_contacts = "multiple contacts"
+    one_contact = "one_contact"
+    all = "all"
+    skipped = "skipped"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def decide_entry_type(entry: Entry) -> Sequence[EntryType]:
+    min_names, max_names = min_max_names(entry["emails"], entry["phones"])
+    if not max_names:
+        return (EntryType.skipped,)
+    entry_types = (
+        EntryType.all,
+        (EntryType.one_contact if max_names == 1 else EntryType.multiple_contacts),
+    )
+    names_count = len(entry["names"])
+    if names_count <= max_names:
+        if names_count < min_names:
+            return entry_types + (EntryType.not_enough,)
+        return entry_types + (EntryType.correct,)
+    return entry_types + (EntryType.too_many,)
+
+
+def analyze_metrics(entries: List[Entry]) -> Tuple[Mapping, Mapping]:
+    typed_entries = [(decide_entry_type(entry), entry) for entry in entries]
+    entries_by_type = {
+        entry_type_being_found: [
+            entry
+            for entry_types, entry in typed_entries
+            if entry_type_being_found in entry_types
+        ]
+        for entry_type_being_found in EntryType
     }
-    counts = dict(zip(entry_types.keys(), map(len, entry_types.values())))
-    for flag in list(Flags)[:4]:
-        print("{}: {:.2%}. ".format(flag, counts[flag] / counts[Flags.all]), end="")
+    counts = dict(zip(entries_by_type.keys(), map(len, entries_by_type.values())))
+    for entry_type in list(EntryType)[:4]:
+        print(
+            "{}: {:.2%}. ".format(
+                entry_type, counts[entry_type] / counts[EntryType.all]
+            ),
+            end="",
+        )
     print()
-    return locals()
+    return (entries_by_type, counts)
 
 
-def main() -> Dict:
+def main() -> Tuple[Mapping, Mapping]:
     parser = argparse.ArgumentParser("extract names and contact info from csv")
     parser.add_argument("-i", "--input", default="data/trello.csv")
     parser.add_argument("-o", "--output", default="data/info.csv")
     args = parser.parse_args()
     lines = list(csv.reader(open(args.input, encoding="utf-8")))[1:]
     with cache:
-        entries = [extract_info(line[0], flags=True) for line in lines]
+        entries = [extract_info(line[0]) for line in lines]
     save_entries(entries, args.output)
-    return metrics(entries)
+    return analyze_metrics(entries)
 
 
 if __name__ == "__main__":
-    debugging = main()
+    metrics = main()
