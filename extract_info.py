@@ -3,7 +3,7 @@ import sys
 import csv
 import argparse
 from enum import Enum
-from itertools import zip_longest, filterfalse, tee
+from itertools import zip_longest, tee
 from typing import List, Mapping, Tuple, Sequence, Iterator, Any
 from strategies import Stages, STAGES
 from cache import cache
@@ -14,28 +14,37 @@ NameAttempts = Iterator[Names]
 Entry = Mapping[str, Names]
 
 
-def partition_similar(name: str, other_names: Names) -> Tuple[Names, Names]:
-    def similar_to(other_name: str) -> bool:
-        return name in other_name or other_name in name
-
-    return (
-        list(filter(similar_to, other_names)),
-        list(filterfalse(similar_to, other_names)),
-    )
-
-
 def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names:
-    if not recursive:
-        if not (left and right):
-            return left or right
-    else:
+    """
+    Take the first name on the left, if it contains or is contained by a name
+    on the right, set aside all of the names on the left or right that the first
+    name contains or is contained by, and return [the longest of these]
+    + [the result of repeating this process on everything that was not set aside]
+
+    If either left or right are empty, return the other one.
+    """
+    if recursive:
         if not left:
             return []
+    else:
+        if not (left and right):
+            return left or right
     first_left, *remaining_left = left
-    similar_right, dissimilar_right = partition_similar(first_left, right)
+    similar_right = set(
+        right_name
+        for right_name in right
+        if right_name in first_left or first_left in right_name
+    )
     if similar_right:
-        similar_left, dissimilar_left = partition_similar(first_left, remaining_left)
-        intersection = max(first_left, *similar_left, *similar_right, key=len)
+        # catch duplicate similar names
+        also_similar_left = set(
+            left_name
+            for left_name in remaining_left
+            if left_name in first_left or first_left in left_name
+        )
+        intersection = max(first_left, *similar_right, *also_similar_left, key=len)
+        dissimilar_right = list(set(right) - similar_right)
+        dissimilar_left = list(set(remaining_left) - also_similar_left)
         return [intersection] + fuzzy_intersect(dissimilar_left, dissimilar_right, True)
     return fuzzy_intersect(remaining_left, right, True)
 
