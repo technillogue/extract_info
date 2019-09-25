@@ -19,20 +19,25 @@ EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+")
 
 def extract_contacts(line: str) -> Tuple[List[str], List[str]]:
     emails = EMAIL_RE.findall(line)
+    # "how hard can it be to write a regex to match phone numbers?"
+    # way too hard for international formats, as it turns out
     phones = [
         format_number(match.number, PhoneNumberFormat.INTERNATIONAL)
         for match in PhoneNumberMatcher(line, "US")
-    ]
+    ] 
     return emails, phones
 
 
 def min_max_names(emails: List[str], phones: List[str]) -> Tuple[int, int]:
+    """ 
+    Returns lower and upper bound on the number of names a text could have
+    based on the contact info, e.g., if there's 1 email and 3 phones, 
+    there could be between 1 and 3 names. If there's 0 emails and 1 phone,
+    there can only be exactly one name.
+    """
     contact_counts: Tuple[int, int] = (len(emails), len(phones))
-    # if there's 1 email and 3 phones, min_names should be 1
-    # but if there's 0 email and 1 phone, it should be 1, not 0
     min_names: int = max(1, min(contact_counts))
     max_names: int = max(contact_counts)
-    # maybe add min, likely_max, absolute_max to distingish max vs sum?
     return (min_names, max_names)
 
 
