@@ -32,7 +32,8 @@ def generate_graph(
     stage, or, if this is the last strategy, can go to the next strategy of the
     previous stage.
     """
-    # state[i] is an index of strategies[i]
+    # states[...][i] indexes stages[i], e.g. (1, 2, 3) is the 1st strategy of stage 0, 
+    # the 2nd strategy of stage 1, and the 3rd strategy of stage 2
     states = product(*(range(len(stage)) for stage in stages))
     # zeros cannot be followed by zeros, we can't have started stage n+1 but not n
     valid_states = [
