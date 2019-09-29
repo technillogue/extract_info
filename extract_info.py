@@ -92,12 +92,13 @@ def extract_names(
     google_extractions: Iterator[Names] = filter_min_criteria(
         extractor(text) for extractor in google_extractors
     )
+    crude_extractions: Iterator[Names] = filter_min_criteria(
+        extractor(text) for extractor in crude_extractors
+    )
     consensuses = (
         fuzzy_intersect(google_extraction, crude_extraction)
         for google_extraction in google_extractions
-        for crude_extraction in filter_min_criteria(
-            extractor(text) for extractor in crude_extractors
-        )
+        for crude_extraction in crude_extractions
     )
     refinements = (
         refine(consensus) for consensus in consensuses for refine in refiners
