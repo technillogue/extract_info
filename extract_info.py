@@ -73,7 +73,7 @@ def fuzzy_intersect(left: Names, right: Names, recursive: bool = False) -> Names
         dissimilar_right = list(set(right) - similar_right)
         dissimilar_left = list(set(remaining_left) - also_similar_left)
         return [intersection] + fuzzy_intersect(dissimilar_left, dissimilar_right, True)
-    return fuzzy_intersect(remaining_left, right, recursion=True)
+    return fuzzy_intersect(remaining_left, right, recursive=True)
 
 
 def extract_names(
