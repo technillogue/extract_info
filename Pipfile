@@ -1,0 +1,19 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+phonenumbers = "*"
+typing-extensions = "*"
+nltk = "*"
+google-api-python-client = "*"
+pytest = "*"
+pdbpp = "*"
+ipython = "*"
+numpy = "*"
+
+[requires]
+python_version = "3.7"
