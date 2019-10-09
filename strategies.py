@@ -51,6 +51,10 @@ def nltk_extract_names(text: str) -> Names:
     "Returns names using NLTK Named Entity Recognition filtering repetition"
     import nltk
 
+    nltk.download("maxent_ne_chunker")
+    nltk.download("averaged_perceptron_tagger")
+    nltk.download("punkt")
+    nltk.download("words")
     names = [
         " ".join(labeled[0] for labeled in chunk)
         for sentance in nltk.sent_tokenize(text)
@@ -137,6 +141,9 @@ def remove_none(names: Names) -> Names:
 @cache.with_cache
 def remove_synonyms(names: Names) -> Names:
     from nltk.corpus import wordnet  # if this is cached we don't need to import nltk
+    import nltk
+
+    nltk.download("wordnet")
 
     return [
         name

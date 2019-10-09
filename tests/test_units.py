@@ -4,10 +4,11 @@ import pytest
 import strategies
 import extract_info
 from cache import cache
-from test_integration import generate_graph
+from test_integration import generate_graph, save_cache
 
 number_of_limbs_owed_to_google: int
 
+@pytest.mark.usefixtures("save_cache")
 def test_cache() -> None:
     # pylint: disable=global-statement
     global number_of_limbs_owed_to_google
@@ -71,7 +72,7 @@ def test_fuzzy_intersect() -> None:
 
 LINE = "12/31 -- Lisa balloon drop -- off 617.555.5555 - paid, check deposited"
 
-
+@pytest.mark.usefixtures("save_cache")
 def test_no_google() -> None:
     # LINE happens to never have any results from Google
     actual = extract_info.extract_names(LINE, 1, 1)
