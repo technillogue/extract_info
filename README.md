@@ -10,4 +10,4 @@ Features:
 - Combinatorially tries various pre- and post- processing strategies
 - Careful metaprograming makes it trivial to add more NER algorithims or pre-/post- processors 
 - Includes a feature for labeling data for test cases, and updating labels mid-test if desired
-- The algorithim to try combinations of strategies corresponds to a deterministic finate state automata. The tests generate a graph for this dFSA, trace the order in which strategies are tries, and use this to verify that the strategies were tried in the right order, catching some false positives and inefficient ways of getting to the right answer.
+- The algorithim to try combinations of strategies corresponds to a deterministic finate state automatum. The tests generate a graph for this dFSA, trace the order in which strategies are tries, and use this to verify that the strategies were tried in the right order, catching some false positives and inefficient ways of getting to the right answer.
