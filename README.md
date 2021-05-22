@@ -1,13 +1,10 @@
-Extract names and contact information from bilingual, ungrammatical sentence fragments.
+Extract names and contact information from multilingual, ungrammatical, and unstructured records. 
 
-Motivating use case: advertising to clients who are similar to past clients on Facebook is easier and more effective than developing your own targetting, but requires you to have your client's contact info. This tool allows you to do that with unstructured records.
-
-Features:
-- Clean, mostly functional code with comprehensive type annotations and integration testing
-- Infers needed number of names in each line based on number of emails and phone numbers (if you have multiple contact people per sale). >90% accurate by this metric.
-- Tries to find a consensus between Google Cloud Knowledge Graph Named Entity Recognition (which has fewer false positives, but only works well for English) and NLTK.ne_chunk (which usually works, but has more false positives)
+- Try to find a fuzzy consensus between Google Cloud Knowledge Graph Named Entity Recognition (NER) (fewer false positives, place name/human name disambiguation, but only works well for English) and NLTK.ne_chunk (which usually works for e.g. Russian or other langauges, but has more false positives)
+- Infer expected number of names in each record based on contact information regexes. >90% accuracy by this metric for the motivating dataset.
 - Caches expensive/slow Google and NLTK calls between runs, but keeps cache files small even with long record entries
-- Combinatorially tries various pre- and post- processing strategies
-- Careful metaprograming makes it trivial to add more NER algorithims or pre-/post- processors 
-- Includes a feature for labeling data for test cases, and updating labels mid-test if desired
-- The algorithim to try combinations of strategies corresponds to a deterministic finate state automatum. The tests generate a graph for this dFSA, trace the order in which strategies are tries, and use this to verify that the strategies were tried in the right order, catching some false positives and inefficient ways of getting to the right answer.
+- Explore the solution space of combining various preprocessing steps / NER backends / merge steps / filter steps while following heuristics to go from least false positives and least cost -> most false positives at bounded cost to achieve said number.
+- Easy to add more named more NER backends and other strategies for each stage. Model an arbitrary number of extraction stages.
+     - Desired additions: whatever aws' NRE is, some of the more aggressively mathy expectation maximization and data linkage algorithms
+- Clean, almost purely functional code with comprehensive type annotations
+- Integration tests verify heuristics are followed correctly and provide labeled/inferred accuracy
